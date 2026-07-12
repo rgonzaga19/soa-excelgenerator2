@@ -10,38 +10,36 @@
 
 <body>
 
-<div class="container">
+<!-- Sticky header -->
+<header class="header">
 
-    <header class="header">
-
-        <div class="header-left">
-            <div class="logo-title">
-                <img
-                    src="/images/logo.svg"
-                    alt="SOA Generator Logo"
-                    class="logo"
-                >
-                <div>
-                    <h1>SOA Excel Generator</h1>
-                    <p>PhilHealth Statement of Account Generator</p>
-                </div>
+    <div class="header-left">
+        <div class="logo-title">
+            <img
+                src="/images/logo.svg"
+                alt="SOA Generator Logo"
+                class="logo"
+            >
+            <div>
+                <h1>SOA Excel Generator</h1>
+                <p>PhilHealth Statement of Account Generator</p>
             </div>
         </div>
-
-        <div class="header-right">
-            <div class="version-badge">v1.0.1</div>
-            <button id="aboutBtn" class="about-btn">About</button>
-        </div>
-
-    </header>
-
-    <div class="status-bar">
-        <span id="systemStatus">🟢 System Ready</span>
     </div>
+
+    <div class="header-right">
+        <div class="version-badge">v2.0.0</div>
+        <button id="settingsBtn" class="about-btn" title="License settings">⚙ Settings</button>
+        <button id="aboutBtn" class="about-btn">About</button>
+    </div>
+
+</header>
+
+<div class="container">
 
     <div class="dashboard">
 
-        <!-- LEFT PANEL -->
+        <!-- LEFT PANEL — the only section that scrolls with the page -->
         <div class="left-panel">
 
             <div class="card">
@@ -107,22 +105,26 @@
             -->
             <div id="claimsContainer"></div>
 
-            <div class="generate-area">
-                <button id="clearBtn" class="secondary-btn">Clear Form</button>
-                <button id="generateBtn">Generate Excel</button>
-            </div>
-
         </div>
 
-        <!-- RIGHT PANEL -->
-        <div class="right-panel">
+        <!-- RIGHT PANEL — sticky: status, summary, and actions stay in view -->
+        <aside class="right-panel">
+
+            <div class="status-bar">
+                <span id="systemStatus">🟢 System Ready</span>
+            </div>
 
             <div class="card">
                 <h2>Summary</h2>
                 <div id="summary"></div>
             </div>
 
-        </div>
+            <div class="generate-area">
+                <button id="clearBtn" class="secondary-btn">Clear Form</button>
+                <button id="generateBtn">Generate Excel</button>
+            </div>
+
+        </aside>
 
     </div>
 
@@ -136,7 +138,7 @@
 
         <h2>🏥 SOA Excel Generator</h2>
 
-        <p><b>Version:</b> 1.0.1</p>
+        <p><b>Version:</b> 2.0.0</p>
 
         <p>Internal PhilHealth Statement of Account Generator.</p>
 
@@ -159,10 +161,40 @@
     </div>
 </div>
 
+<!-- Settings Modal (license key) -->
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+
+        <span id="closeSettings" class="close-btn">&times;</span>
+
+        <h2>⚙ Settings</h2>
+
+        <p>Enter the license key issued for this installation. It's checked against our license server whenever you generate a Statement of Account.</p>
+
+        <div class="field">
+            <label for="licenseKeyInput">License Key</label>
+            <input
+                id="licenseKeyInput"
+                type="password"
+                placeholder="Enter your license key"
+                autocomplete="off"
+            >
+            <small id="licenseError" class="field-error">Please enter a valid license key.</small>
+        </div>
+
+        <p id="licenseStatus" class="license-status">No license key saved yet.</p>
+
+        <div class="settings-actions">
+            <button id="saveLicenseBtn" class="secondary-btn">Save Key</button>
+        </div>
+
+    </div>
+</div>
+
 <!-- Footer -->
 <footer class="footer">
     <div>© 2026 SOA Excel Generator</div>
-    <div>Version 1.0.1</div>
+    <div>Version 2.0.0</div>
     <div>Developed by Romel Gonzaga</div>
 </footer>
 
@@ -170,7 +202,7 @@
 <div id="loadingOverlay" class="loading-overlay">
     <div class="loading-box">
         <div class="spinner"></div>
-        <p>Generating Excel...</p>
+        <p id="loadingText">Generating Excel...</p>
         <small>Please wait a few seconds.</small>
     </div>
 </div>

@@ -16,6 +16,13 @@ const appState = {
 
 };
 
+// ── License settings ─────────────────────────────────────────────
+// TODO: replace with your actual Cloudflare Worker URL and adjust the
+// expected response shape below (validateLicenseKey) to match what it
+// actually returns.
+const LICENSE_VALIDATION_URL = "https://YOUR-CLOUDFLARE-WORKER.workers.dev/validate-license";
+const LICENSE_STORAGE_KEY = "soaLicenseKey";
+
 const claimsContainer = document.getElementById("claimsContainer");
 
 const summary = document.getElementById("summary");
@@ -367,6 +374,125 @@ document
 
 renderClaims();
 
+// ── License settings helpers ────────────────────────────────────
+
+function getSavedLicenseKey() {
+    return (localStorage.getItem(LICENSE_STORAGE_KEY) || "").trim();
+}
+
+function saveLicenseKey(key) {
+    localStorage.setItem(LICENSE_STORAGE_KEY, key.trim());
+}
+
+function updateLicenseStatusText() {
+
+    const statusEl = document.getElementById("licenseStatus");
+    const savedKey = getSavedLicenseKey();
+
+    if (!savedKey) {
+        statusEl.textContent = "No license key saved yet.";
+        statusEl.className = "license-status";
+        return;
+    }
+
+    // Mask all but the last 4 characters so it's clear a key is saved
+    // without displaying it in full every time the modal opens.
+    const masked =
+        savedKey.length > 4
+            ? "•".repeat(savedKey.length - 4) + savedKey.slice(-4)
+            : "••••";
+
+    statusEl.textContent = `Saved key: ${masked}`;
+    statusEl.className = "license-status saved";
+
+}
+
+function openSettingsModal() {
+
+    const modal = document.getElementById("settingsModal");
+    const input = document.getElementById("licenseKeyInput");
+
+    input.value = getSavedLicenseKey();
+    document.getElementById("licenseError").style.display = "none";
+
+    updateLicenseStatusText();
+
+    modal.style.display = "block";
+
+}
+
+function closeSettingsModal() {
+    document.getElementById("settingsModal").style.display = "none";
+}
+
+// Calls out to the license validation endpoint. Returns true/false.
+// Network failures are treated as "could not verify" rather than silently
+// letting generation proceed, since a downed validation endpoint is not
+// the same thing as a confirmed-valid key.
+async function validateLicenseKey(key) {
+
+    try {
+
+        const response = await fetch(LICENSE_VALIDATION_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ licenseKey: key })
+        });
+
+        if (!response.ok) {
+            return { valid: false, reason: "server" };
+        }
+
+        const data = await response.json();
+
+        return { valid: !!data.valid, reason: data.valid ? null : "invalid" };
+
+    } catch (err) {
+
+        console.error("License validation request failed:", err);
+
+        return { valid: false, reason: "network" };
+
+    }
+
+}
+
+document
+    .getElementById("settingsBtn")
+    .addEventListener("click", openSettingsModal);
+
+document
+    .getElementById("closeSettings")
+    .addEventListener("click", closeSettingsModal);
+
+document
+    .getElementById("saveLicenseBtn")
+    .addEventListener("click", () => {
+
+        const input = document.getElementById("licenseKeyInput");
+        const error = document.getElementById("licenseError");
+
+        const key = input.value.trim();
+
+        if (!key) {
+            error.style.display = "block";
+            return;
+        }
+
+        error.style.display = "none";
+
+        saveLicenseKey(key);
+
+        updateLicenseStatusText();
+
+        showToast("License key saved.", "success");
+
+    });
+
+// ── Excel generation ─────────────────────────────────────────────
+
 async function generateExcel() {
 
         const missingDate = appState.claims.find(
@@ -384,17 +510,62 @@ async function generateExcel() {
 
         }
 
+        const savedKey = getSavedLicenseKey();
+
+        if (!savedKey) {
+
+            showToast(
+                "Please enter your license key in Settings before generating.",
+                "warning"
+            );
+
+            openSettingsModal();
+
+            return;
+
+        }
+
         const overlay = document.getElementById("loadingOverlay");
+        const loadingText = document.getElementById("loadingText");
 
         const btn = document.getElementById("generateBtn");
 
         overlay.style.display = "flex";
 
         btn.disabled = true;
+        loadingText.textContent = "Validating license...";
+        btn.textContent = "Validating...";
 
+        document.getElementById("systemStatus").textContent =
+            "🟡 Validating license...";
+
+        const licenseResult = await validateLicenseKey(savedKey);
+
+        if (!licenseResult.valid) {
+
+            overlay.style.display = "none";
+
+            btn.disabled = false;
+            btn.textContent = "Generate Excel";
+
+            const message =
+                licenseResult.reason === "network"
+                    ? "Could not verify license. Check your internet connection."
+                    : "Invalid license key. Please check Settings.";
+
+            showToast(message, "error");
+
+            document.getElementById("systemStatus").textContent =
+                "🔴 License check failed";
+
+            openSettingsModal();
+
+            return;
+
+        }
+
+        loadingText.textContent = "Generating Excel...";
         btn.textContent = "Generating...";
-
-
 
     console.log("Generate clicked");
 
@@ -581,6 +752,9 @@ if (aboutBtn && aboutModal && closeAbout) {
     window.onclick = (e) => {
         if (e.target === aboutModal) {
             aboutModal.style.display = "none";
+        }
+        if (e.target === document.getElementById("settingsModal")) {
+            closeSettingsModal();
         }
     };
 
