@@ -1,0 +1,156 @@
+function fillSheet1(workbook, data) {
+
+    const sheet = workbook.getWorksheet(1);
+
+    // Remove the original template rows
+    sheet.spliceRows(3, 5);
+
+    let currentRow = 3;
+
+    for (const claim of data.claims) {
+
+                const drugRows = [
+            {
+                itemId: "MED01",
+                brand: "APRINOL",
+                generic: "REGULAR HEPARIN",
+                qty: 1,
+                price: 250,
+                preparation: "VIAL",
+                frequency: "DURING HD TREATMENT",
+                route: "IV",
+                philhealthMapping: "HEPARIN (as SODIUM) 5000 IU/mL SOLUTION 5 mL VIAL",
+                philhealthUnit: "VIAL"
+            },
+            {
+                itemId: "MED02",
+                brand: "SALINE PHILRX",
+                generic: "PNSS(PLAIN NORMAL SALINE SOLUTION)",
+                qty: 1,
+                price: 100,
+                preparation: "BOTTLE",
+                frequency: "DURING HD TREATMENT",
+                route: "IV",
+                philhealthMapping: "0.9% SODIUM CHLORIDE SOLUTION 1 L BOTTLE",
+                philhealthUnit: "BOTTLE"
+            },
+            {
+                itemId: "MED03",
+                brand: "CITRAPURE",
+                generic: "HEMODIALYSIS ACID CONCENTRATE (DIALYSATE ACETATE BASED)",
+                qty: 1,
+                price: 375,
+                preparation: "GALLON",
+                frequency: "DURING HD TREATMENT",
+                route: "DIALYSATE",
+                philhealthMapping:
+                    "HEMODIALYSIS ACID CONCENTRATE (DIALYSATE ACETATE BASED) 5 L",
+                philhealthUnit: "GALLON"
+            },
+            {
+                itemId: "MED04",
+                brand: "RENAL PURE",
+                generic: "HEMODIALYSIS BICARBONATE CONCENTRATE",
+                qty: 1,
+                price: 175,
+                preparation: "GALLON",
+                frequency: "DURING HD TREATMENT",
+                route: "DIALYSATE",
+                philhealthMapping:
+                    "HEMODIALYSIS BICARBONATE CONCENTRATE 5 L",
+                philhealthUnit: "GALLON"
+            },
+            {
+                itemId: "MED05",
+
+                brand:
+                    claim.epoType === "beta"
+                        ? "RECORMON"
+                        : "EPOETINE",
+
+                generic:
+                    claim.epoType === "beta"
+                        ? "EPOETIN BETA"
+                        : "EPOETIN ALFA",
+
+                qty: claim.epoQty || 1,
+
+                price:
+                    claim.epoType === "beta"
+                        ? 1500
+                        : 875,
+
+                preparation: "PREFILLED SYRINGE",
+
+                frequency: "POST HD TREATMENT",
+
+                route: "IV/SUBCUTANEOUS",
+
+                philhealthMapping:
+                    claim.epoType === "beta"
+                        ? "EPOETIN BETA (RECOMBINANT ERYTHROPOIETIN) 5000IU/0.3ml SOLUTION PRE-FILLED SYRINGE WITH NEEDLE"
+                        : "EPOETIN ALFA (RECOMBINANT HUMAN ERYTHROPOIETIN) 4000 IU/mL SOLUTION 1 mL PRE-FILLED GLASS SYRINGE",
+
+                philhealthUnit: "VIAL"
+            }
+        ];
+
+        const rows = claim.hasEpo
+            ? drugRows
+            : drugRows.slice(0, 4);
+
+
+        const rowsForClaim = claim.hasEpo ? 5 : 4;
+
+        // create blank rows
+        for (let i = 0; i < rowsForClaim; i++) {
+            sheet.insertRow(currentRow + i, []);
+        }
+
+        // write render date to every row of this claim
+        for (let i = 0; i < rowsForClaim; i++) {
+            const cell = sheet.getCell(`H${currentRow + i}`);
+
+            cell.value = new Date(claim.renderDate);
+
+            cell.numFmt = "m/d/yyyy";
+        }
+
+       // Populate drug information
+        for (let i = 0; i < rows.length; i++) {
+
+            const row = rows[i];
+
+            sheet.getCell(`A${currentRow + i}`).value = row.itemId;
+            sheet.getCell(`B${currentRow + i}`).value = row.brand;
+            sheet.getCell(`C${currentRow + i}`).value = row.generic;
+
+            sheet.getCell(`D${currentRow + i}`).value = row.qty;
+
+            const priceCell = sheet.getCell(`E${currentRow + i}`);
+            priceCell.value = row.price;
+            priceCell.numFmt = "0.00";
+
+            const totalCell = sheet.getCell(`F${currentRow + i}`);
+            totalCell.value = row.qty * row.price;
+            totalCell.numFmt = "0.00";
+
+            sheet.getCell(`G${currentRow + i}`).value = row.preparation;
+
+            sheet.getCell(`I${currentRow + i}`).value = row.frequency;
+
+            sheet.getCell(`J${currentRow + i}`).value = row.route;
+
+            sheet.getCell(`K${currentRow + i}`).value = row.philhealthMapping;
+
+            sheet.getCell(`L${currentRow + i}`).value = row.philhealthUnit;
+        }
+
+        currentRow += rowsForClaim;
+    }
+
+}
+
+module.exports = {
+    fillSheet1
+};

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOA Excel Generator</title>
+    <link rel="icon" type="image/svg+xml" href="/images/logo.ico">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+    <header class="header">
+
+        <div class="header-left">
+            <div class="logo-title">
+                <img
+                    src="/images/logo.svg"
+                    alt="SOA Generator Logo"
+                    class="logo"
+                >
+                <div>
+                    <h1>SOA Excel Generator</h1>
+                    <p>PhilHealth Statement of Account Generator</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <div class="version-badge">v1.0.1</div>
+            <button id="aboutBtn" class="about-btn">About</button>
+        </div>
+
+    </header>
+
+    <div class="status-bar">
+        <span id="systemStatus">🟢 System Ready</span>
+    </div>
+
+    <div class="dashboard">
+
+        <!-- LEFT PANEL -->
+        <div class="left-panel">
+
+            <div class="card">
+                <h2>General Settings</h2>
+
+                <div class="field">
+                    <label>Access Type</label>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="accessType" value="fistula" checked>
+                            Fistula
+                        </label>
+                        <label>
+                            <input type="radio" name="accessType" value="subkit">
+                            Subkit
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Dialyzer Type</label>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="fluxType" value="high" checked>
+                            High Flux
+                        </label>
+                        <label>
+                            <input type="radio" name="fluxType" value="low">
+                            Low Flux
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Number of Claims</label>
+                    <input
+                        id="claimCount"
+                        type="number"
+                        min="1"
+                        max="7"
+                        maxlength="2"
+                        value="1"
+                        oninput="if(this.value.length > 2) this.value = this.value.slice(0,2)"
+                    >
+                    <small id="claimCountError">Maximum of 7 claims.</small>
+                </div>
+            </div>
+
+            <!--
+                app.js should render each claim card like:
+                <div class="claim-card">
+                  <h3><span class="claim-num">1</span> Claim #1</h3>
+                  <div class="claim-grid">
+                    <div>
+                      <label>Render Date</label>
+                      <input type="date" ...>
+                    </div>
+                    ...
+                  </div>
+                </div>
+                The .claim-num span gets the blue circle badge automatically via CSS.
+                Date inputs do NOT need a wrapper div — the calendar icon comes from CSS background-image.
+            -->
+            <div id="claimsContainer"></div>
+
+            <div class="generate-area">
+                <button id="clearBtn" class="secondary-btn">Clear Form</button>
+                <button id="generateBtn">Generate Excel</button>
+            </div>
+
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="right-panel">
+
+            <div class="card">
+                <h2>Summary</h2>
+                <div id="summary"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- About Modal -->
+<div id="aboutModal" class="modal">
+    <div class="modal-content">
+
+        <span id="closeAbout" class="close-btn">&times;</span>
+
+        <h2>🏥 SOA Excel Generator</h2>
+
+        <p><b>Version:</b> 1.0.1</p>
+
+        <p>Internal PhilHealth Statement of Account Generator.</p>
+
+        <p>
+            <b>Other tools:</b>
+            <a
+                href="https://rgonzaga19.github.io/pdfsplitter/"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="tool-link"
+            >
+                📄 PDF Splitter
+            </a>
+        </p>
+
+        <p><b>Developer:</b> Romel Gonzaga</p>
+
+        <p>Built with Node.js, Express and ExcelJS.</p>
+
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+    <div>© 2026 SOA Excel Generator</div>
+    <div>Version 1.0.1</div>
+    <div>Developed by Romel Gonzaga</div>
+</footer>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-box">
+        <div class="spinner"></div>
+        <p>Generating Excel...</p>
+        <small>Please wait a few seconds.</small>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script src="/js/app.js"></script>
+
+</body>
+</html>
