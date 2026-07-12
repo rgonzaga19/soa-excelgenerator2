@@ -84,6 +84,25 @@ function getRoomBoardPrices(claim) {
             adminCost: 212.50
         };
     }
+    // // DOUBLE DOSE BETA + NO LAB
+    // if (hasEpo && epoType === "beta" && epoQty === 2 && !hasLab) {
+    //     return {
+    //         roomUseMachine: 500.00,
+    //         personnelCost: /* need correct value */,
+    //         rentalUtilities: /* need correct value */,
+    //         adminCost: /* need correct value */,
+    //     };
+    // }
+
+    // // DOUBLE DOSE BETA + LAB
+    // if (hasEpo && epoType === "beta" && epoQty === 2 && hasLab) {
+    //     return {
+    //         roomUseMachine: 500.00,
+    //         personnelCost: /* need correct value */,
+    //         rentalUtilities: /* need correct value */,
+    //         adminCost: /* need correct value */,
+    //     };
+    // }
 
     // Fallback
     return {

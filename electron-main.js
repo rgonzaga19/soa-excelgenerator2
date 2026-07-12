@@ -1,8 +1,6 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
-
-// Start Express server
-require("./server");
+const server = require("./server");
 
 function createWindow() {
 
@@ -16,6 +14,11 @@ function createWindow() {
     win.loadURL("http://localhost:3000");
 }
 
-app.whenReady().then(() => {
-    setTimeout(createWindow, 1000);
+app.whenReady().then(async () => {
+    // Wait for the actual "server is listening" signal instead of a blind
+    // fixed delay — removes unnecessary wait time on fast starts and
+    // avoids a blank/failed window load if the server ever takes longer
+    // than the old hardcoded 1000ms to come up.
+    await server.start();
+    createWindow();
 });
