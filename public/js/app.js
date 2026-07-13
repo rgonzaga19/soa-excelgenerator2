@@ -374,6 +374,50 @@ document
 
 renderClaims();
 
+// ── Theme (dark mode) ────────────────────────────────────────────
+// Note: the initial theme is already applied by an inline script in
+// <head> before this file loads (avoids a flash of the light theme).
+// This section just wires up the toggle button and keeps localStorage
+// in sync with whatever the user picks from here on.
+
+const THEME_STORAGE_KEY = "soaTheme";
+
+function getCurrentTheme() {
+    return document.documentElement.getAttribute("data-theme") === "dark"
+        ? "dark"
+        : "light";
+}
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute("data-theme", theme);
+
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (e) {
+        // localStorage unavailable — theme just won't persist across restarts.
+    }
+
+    const btn = document.getElementById("themeToggleBtn");
+
+    if (btn) {
+        btn.textContent = theme === "dark" ? "☀ Light" : "🌙 Dark";
+    }
+
+}
+
+function toggleTheme() {
+    applyTheme(getCurrentTheme() === "dark" ? "light" : "dark");
+}
+
+// Sync the button label with whatever theme the inline head script already
+// applied, so the icon/text is correct on first render.
+applyTheme(getCurrentTheme());
+
+document
+    .getElementById("themeToggleBtn")
+    .addEventListener("click", toggleTheme);
+
 // ── License settings helpers ────────────────────────────────────
 
 function getSavedLicenseKey() {
