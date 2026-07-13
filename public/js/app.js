@@ -20,8 +20,9 @@ const appState = {
 // TODO: replace with your actual Cloudflare Worker URL and adjust the
 // expected response shape below (validateLicenseKey) to match what it
 // actually returns.
-const LICENSE_VALIDATION_URL = "https://YOUR-CLOUDFLARE-WORKER.workers.dev/validate-license";
+const LICENSE_VALIDATION_URL = "https://beabot-license.gonzagaromel19.workers.dev";
 const LICENSE_STORAGE_KEY = "soaLicenseKey";
+const LICENSE_REQUEST_TIMEOUT_MS = 10000; // matches the Python client's timeout=10
 
 const claimsContainer = document.getElementById("claimsContainer");
 
@@ -420,12 +421,21 @@ document
 
 // ── License settings helpers ────────────────────────────────────
 
+// Cached result of the most recent successful validation, so the Settings
+// panel can show owner/plan/expiry instead of just a masked key once we've
+// actually confirmed the key against the server.
+let lastLicenseInfo = null;
+
 function getSavedLicenseKey() {
     return (localStorage.getItem(LICENSE_STORAGE_KEY) || "").trim();
 }
 
 function saveLicenseKey(key) {
     localStorage.setItem(LICENSE_STORAGE_KEY, key.trim());
+    // A newly-entered key hasn't been validated yet — drop any cached
+    // info from a previous (different) key so the status display doesn't
+    // show stale owner/plan details for a key that's since changed.
+    lastLicenseInfo = null;
 }
 
 function updateLicenseStatusText() {
@@ -439,15 +449,43 @@ function updateLicenseStatusText() {
         return;
     }
 
-    // Mask all but the last 4 characters so it's clear a key is saved
-    // without displaying it in full every time the modal opens.
+    if (lastLicenseInfo && lastLicenseInfo.valid) {
+
+        const parts = [];
+
+        if (lastLicenseInfo.owner) parts.push(lastLicenseInfo.owner);
+        if (lastLicenseInfo.plan) parts.push(`${lastLicenseInfo.plan} plan`);
+        if (lastLicenseInfo.expires) parts.push(`expires ${lastLicenseInfo.expires}`);
+
+        statusEl.textContent = parts.length
+            ? `Licensed to ${parts.join(" — ")}`
+            : "License verified.";
+
+        statusEl.className = "license-status saved";
+
+        return;
+
+    }
+
+    // A confirmed rejection (invalid key or expired license) from the
+    // server — show the server's own explanation rather than a generic
+    // "not yet verified", since we actually know why it failed.
+    if (lastLicenseInfo && (lastLicenseInfo.reason === "invalid" || lastLicenseInfo.reason === "expired")) {
+        statusEl.textContent = lastLicenseInfo.message || "This license key was rejected by the server.";
+        statusEl.className = "license-status invalid";
+        return;
+    }
+
+    // Saved but not yet (re)verified this session — mask all but the
+    // last 4 characters so it's clear a key is saved without displaying
+    // it in full every time the modal opens.
     const masked =
         savedKey.length > 4
             ? "•".repeat(savedKey.length - 4) + savedKey.slice(-4)
             : "••••";
 
-    statusEl.textContent = `Saved key: ${masked}`;
-    statusEl.className = "license-status saved";
+    statusEl.textContent = `Saved key: ${masked} (not yet verified)`;
+    statusEl.className = "license-status";
 
 }
 
@@ -469,11 +507,32 @@ function closeSettingsModal() {
     document.getElementById("settingsModal").style.display = "none";
 }
 
-// Calls out to the license validation endpoint. Returns true/false.
-// Network failures are treated as "could not verify" rather than silently
-// letting generation proceed, since a downed validation endpoint is not
-// the same thing as a confirmed-valid key.
+// Calls the Cloudflare license server. Matches worker.js exactly:
+//   - POST { license: <key> }, 10 second timeout
+//   - Almost every outcome is HTTP 200 with { valid, reason?, owner?,
+//     plan?, expires? } in the body — the worker only uses non-200 for
+//     405 (wrong method) and 400 (malformed request), and even those
+//     bodies carry a JSON "reason".
+//   - An expired license comes back as { valid: false, reason: "License
+//     expired", owner, plan, expires } — still rejected, but with enough
+//     detail to tell the user *why* rather than a flat "invalid".
+// Returns { valid, owner?, plan?, expires?, reason?, message? } — reason
+// and message are only present when valid is false.
 async function validateLicenseKey(key) {
+
+    if (!key) {
+        return {
+            valid: false,
+            reason: "empty",
+            message: "Please enter a license key."
+        };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+        () => controller.abort(),
+        LICENSE_REQUEST_TIMEOUT_MS
+    );
 
     try {
 
@@ -482,22 +541,87 @@ async function validateLicenseKey(key) {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ licenseKey: key })
+            body: JSON.stringify({ license: key.trim() }),
+            signal: controller.signal
         });
 
-        if (!response.ok) {
-            return { valid: false, reason: "server" };
+        clearTimeout(timeoutId);
+
+        // The worker returns a JSON body with a "reason" field on every
+        // status code it uses (200, 400, 405), so parse first and only
+        // fall back to a generic HTTP message if the body itself isn't
+        // valid JSON (e.g. an upstream/network failure Cloudflare itself
+        // returned an HTML error page for).
+        let data;
+
+        try {
+            data = await response.json();
+        } catch (parseErr) {
+            return {
+                valid: false,
+                reason: "server",
+                message: `License server returned HTTP ${response.status}`
+            };
         }
 
-        const data = await response.json();
+        if (!response.ok) {
+            return {
+                valid: false,
+                reason: "server",
+                message: data.reason || `License server returned HTTP ${response.status}`
+            };
+        }
 
-        return { valid: !!data.valid, reason: data.valid ? null : "invalid" };
+        if (!data.valid) {
+
+            const isExpired = data.reason === "License expired";
+
+            let message = data.reason || "Invalid license key. Please check Settings.";
+
+            if (isExpired && data.expires) {
+                const details = [data.owner, data.plan && `${data.plan} plan`]
+                    .filter(Boolean)
+                    .join(", ");
+                message = `License expired on ${data.expires}` + (details ? ` (${details})` : "");
+            }
+
+            return {
+                valid: false,
+                reason: isExpired ? "expired" : "invalid",
+                message,
+                owner: data.owner,
+                plan: data.plan,
+                expires: data.expires
+            };
+
+        }
+
+        return {
+            valid: true,
+            owner: data.owner,
+            plan: data.plan,
+            expires: data.expires
+        };
 
     } catch (err) {
 
+        clearTimeout(timeoutId);
+
         console.error("License validation request failed:", err);
 
-        return { valid: false, reason: "network" };
+        if (err.name === "AbortError") {
+            return {
+                valid: false,
+                reason: "timeout",
+                message: "Connection to the license server timed out."
+            };
+        }
+
+        return {
+            valid: false,
+            reason: "network",
+            message: "Unable to connect to the license server."
+        };
 
     }
 
@@ -593,20 +717,35 @@ async function generateExcel() {
             btn.textContent = "Generate Excel";
 
             const message =
-                licenseResult.reason === "network"
-                    ? "Could not verify license. Check your internet connection."
-                    : "Invalid license key. Please check Settings.";
+                licenseResult.message
+                || "Invalid license key. Please check Settings.";
 
             showToast(message, "error");
 
             document.getElementById("systemStatus").textContent =
                 "🔴 License check failed";
 
-            openSettingsModal();
+            // Cache the failure (invalid/expired/etc.) so Settings can show
+            // *why* it failed next time it's opened, instead of just a
+            // masked "not yet verified" key.
+            lastLicenseInfo = licenseResult;
+
+            // Only pop Settings open for cases the user can fix by editing
+            // the key there (invalid, expired, or missing). A timeout or
+            // network/server error isn't something re-typing the key fixes,
+            // so don't yank focus away from the form for those — the toast
+            // already told them what happened.
+            if (licenseResult.reason === "invalid" || licenseResult.reason === "expired" || licenseResult.reason === "empty") {
+                openSettingsModal();
+            }
 
             return;
 
         }
+
+        // Cache the verified owner/plan/expiry so the Settings panel can
+        // show it next time it's opened, instead of just a masked key.
+        lastLicenseInfo = licenseResult;
 
         loadingText.textContent = "Generating Excel...";
         btn.textContent = "Generating...";
