@@ -68,11 +68,14 @@ function renderClaims() {
 
                     <label>Has EPO</label>
 
-                    <input
-                        type="checkbox"
-                        ${claim.hasEpo ? "checked" : ""}
-                        onchange="toggleEpo(${index},this.checked)"
-                    >
+                    <label class="checkbox-field">
+                        <input
+                            type="checkbox"
+                            ${claim.hasEpo ? "checked" : ""}
+                            onchange="toggleEpo(${index},this.checked)"
+                        >
+                        <span>${claim.hasEpo ? "Yes" : "No"}</span>
+                    </label>
 
                 </div>
 
@@ -131,11 +134,14 @@ function renderClaims() {
 
                     <label>Include Laboratory</label>
 
-                    <input
-                        type="checkbox"
-                        ${claim.hasLab ? "checked" : ""}
-                        onchange="toggleLab(${index})"
-                    >
+                    <label class="checkbox-field">
+                        <input
+                            type="checkbox"
+                            ${claim.hasLab ? "checked" : ""}
+                            onchange="toggleLab(${index})"
+                        >
+                        <span>${claim.hasLab ? "Yes" : "No"}</span>
+                    </label>
 
                 </div>
 
@@ -707,7 +713,9 @@ async function generateExcel() {
         document.getElementById("systemStatus").textContent =
             "🟡 Validating license...";
 
+        console.time("license-validation");
         const licenseResult = await validateLicenseKey(savedKey);
+        console.timeEnd("license-validation");
 
         if (!licenseResult.valid) {
 
@@ -757,6 +765,7 @@ async function generateExcel() {
         document.getElementById("systemStatus").textContent =
             "🟡 Generating Excel...";
 
+        console.time("excel-generation-request");
         const response = await fetch("/generate", {
             method: "POST",
             headers: {
@@ -768,6 +777,8 @@ async function generateExcel() {
         console.log(response);
 
         if (!response.ok) {
+
+            console.timeEnd("excel-generation-request");
 
             overlay.style.display = "none";
 
@@ -788,6 +799,7 @@ async function generateExcel() {
         }
 
         const blob = await response.blob();
+        console.timeEnd("excel-generation-request");
 
         const url = window.URL.createObjectURL(blob);
 

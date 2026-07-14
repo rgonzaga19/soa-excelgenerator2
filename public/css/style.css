@@ -33,6 +33,9 @@
     --accent-border: #c7d2fe;
     --accent-hover: #818cf8;
     --accent-focus-ring: rgba(99,102,241,.12);
+    --accent-shadow: rgba(79,70,229,.25);
+    --accent-shadow-strong: rgba(79,70,229,.32);
+    --accent-btn-hover: #4338ca;
 
     --shadow-sm: rgba(0,0,0,.04);
     --shadow-md: rgba(0,0,0,.07);
@@ -76,6 +79,9 @@
     --accent-border: #3d4a75;
     --accent-hover: #a5b4fc;
     --accent-focus-ring: rgba(129,140,248,.25);
+    --accent-shadow: rgba(129,140,248,.3);
+    --accent-shadow-strong: rgba(129,140,248,.38);
+    --accent-btn-hover: #6d78f0;
 
     --shadow-sm: rgba(0,0,0,.3);
     --shadow-md: rgba(0,0,0,.4);
@@ -95,7 +101,15 @@
 
 /* ── Base ── */
 body {
-    font-family: Arial, Helvetica, sans-serif;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+    /* Tabular figures so prices/qty/dates line up in a fixed-width
+       column instead of drifting with proportional digit widths —
+       this app is mostly dates and money, so it's worth the default. */
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     background: var(--bg-page);
     color: var(--text-primary);
     font-size: 15px;
@@ -145,11 +159,11 @@ body {
 }
 
 .logo-title h1 {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 24px;
+    font-weight: 800;
     color: var(--heading-blue);
     margin: 0;
-    letter-spacing: -.3px;
+    letter-spacing: -.02em;
 }
 
 .logo-title p {
@@ -298,6 +312,45 @@ body {
 .radio-group input[type="radio"] {
     width: 14px;
     height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* ── Checkbox fields (Has EPO / Include Laboratory) ──────────────
+   The whole pill is clickable (it's a <label> wrapping the input),
+   not just the tiny native checkbox box, and the checkbox itself is
+   enlarged for an easier target on both mouse and touch. */
+.checkbox-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-surface);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+.checkbox-field:hover {
+    background: var(--bg-surface-alt);
+    border-color: var(--text-faint);
+}
+
+.checkbox-field:has(input:checked) {
+    background: var(--accent-bg);
+    border-color: var(--accent-hover);
+    color: var(--accent-strong);
+}
+
+.checkbox-field input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
     accent-color: var(--accent);
     cursor: pointer;
     flex-shrink: 0;
@@ -683,8 +736,29 @@ select:focus {
     margin-top: 20px;
 }
 
-.settings-actions .secondary-btn {
-    padding: 10px 22px;
+.save-license-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 11px 26px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .01em;
+    box-shadow: 0 2px 8px var(--accent-shadow);
+    transition: background .15s, transform .1s, box-shadow .15s;
+}
+
+.save-license-btn:hover {
+    background: var(--accent-btn-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--accent-shadow-strong);
+}
+
+.save-license-btn:active {
+    transform: scale(.98);
+    box-shadow: none;
 }
 
 /* Generic small red error text — used the same way as #claimCountError */
