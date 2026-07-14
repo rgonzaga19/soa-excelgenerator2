@@ -2,23 +2,48 @@ const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const server = require("./server");
 
+let mainWindow;
+
 function createWindow() {
 
-    const win = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1500,
         height: 900,
         autoHideMenuBar: true,
-        icon: path.join(__dirname, "public", "images", "logo.ico")
+        icon: path.join(__dirname, "public", "images", "logo.ico"),
+        show: false
     });
 
-    win.loadURL("http://localhost:3000");
+    mainWindow.loadURL("http://localhost:3000");
+
+    // Show the window only after the page has finished loading.
+    mainWindow.once("ready-to-show", () => {
+        mainWindow.show();
+    });
 }
 
 app.whenReady().then(async () => {
-    // Wait for the actual "server is listening" signal instead of a blind
-    // fixed delay — removes unnecessary wait time on fast starts and
-    // avoids a blank/failed window load if the server ever takes longer
-    // than the old hardcoded 1000ms to come up.
+
     await server.start();
     createWindow();
+
+});
+
+// Cleanly stop the Express server.
+app.on("before-quit", () => {
+    server.stop();
+});
+
+// Quit when all windows are closed (except on macOS).
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+        app.quit();
+    }
+});
+
+// Re-create the window if the dock icon is clicked on macOS.
+app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+    }
 });

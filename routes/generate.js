@@ -8,41 +8,57 @@ const router = express.Router();
 const { fillSheet1 } = require("../services/sheet1Generator");
 const { fillSheet2 } = require("../services/sheet2Generator");
 
-const TEMPLATE_PATH = path.join(__dirname, "../templates/master.xlsx");
+/**
+ * Resolve the template location.
+ *
+ * Development:
+ *   <project>/templates/master.xlsx
+ *
+ * Electron (packaged):
+ *   <resources>/templates/master.xlsx
+ */
+const isElectron = !!process.versions.electron;
 
-// Read the template file's bytes into memory once, at startup, instead of
-// hitting the filesystem on every request. workbook.xlsx.load() still has
-// to parse the XLSX structure per request (ExcelJS workbooks are mutated
-// in place by fillSheet1/fillSheet2, so we can't share one workbook object
-// across concurrent requests) — but this removes the disk I/O from the
-// hot path and only reads the file once for the life of the process.
+const TEMPLATE_PATH =
+    isElectron && process.resourcesPath
+        ? path.join(process.resourcesPath, "templates", "master.xlsx")
+        : path.join(__dirname, "..", "templates", "master.xlsx");
+
+// Cache the template in memory so it is only read once.
 let templateBuffer = null;
 
 async function getTemplateBuffer() {
+
     if (!templateBuffer) {
+
+        console.log("[SOA] Loading template from:");
+        console.log(TEMPLATE_PATH);
+
         templateBuffer = await fs.promises.readFile(TEMPLATE_PATH);
+
     }
+
     return templateBuffer;
 }
 
-// Warm the cache as soon as the module loads, so the very first request
-// doesn't pay the disk-read cost either.
+// Preload the template on startup.
 getTemplateBuffer().catch((err) => {
-    console.error("Failed to preload master.xlsx template:", err);
+    console.error("Failed to preload master.xlsx:", err);
 });
 
 router.post("/", async (req, res) => {
+
     try {
+
         const buffer = await getTemplateBuffer();
 
         const workbook = new ExcelJS.Workbook();
 
         await workbook.xlsx.load(buffer);
 
-        // Skip formula recalculation on load if the template doesn't need it
+        // Prevent unnecessary recalculation.
         workbook.calcProperties.fullCalcOnLoad = false;
 
-        // ALL Sheet 1 logic happens here
         fillSheet1(workbook, req.body);
         fillSheet2(workbook, req.body);
 
@@ -72,6 +88,7 @@ router.post("/", async (req, res) => {
         });
 
     }
+
 });
 
 module.exports = router;

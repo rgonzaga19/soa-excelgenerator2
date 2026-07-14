@@ -9,24 +9,33 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/generate", require("./routes/generate"));
 
-// Returns a promise that resolves once the server is actually listening,
-// instead of firing app.listen() blind. This lets electron-main.js wait
-// for the real ready signal rather than guessing with a fixed timeout.
+let serverInstance;
+
+// Starts the Express server and resolves once it's listening.
 function start(port = 3000) {
     return new Promise((resolve) => {
-        app.listen(port, () => {
+        serverInstance = app.listen(port, () => {
             console.log(`Server running on http://localhost:${port}`);
-            resolve();
+            resolve(serverInstance);
         });
     });
 }
 
-// If this file is run directly (e.g. `node server.js`), start the server
-// immediately — same as the original behavior. When required as a module
-// (e.g. by electron-main.js), only export start() and let the caller
-// decide when to invoke it.
+// Gracefully stops the server.
+function stop() {
+    if (serverInstance) {
+        serverInstance.close(() => {
+            console.log("Express server stopped.");
+        });
+    }
+}
+
+// Allow running directly with: node server.js
 if (require.main === module) {
     start();
 }
 
-module.exports = { start };
+module.exports = {
+    start,
+    stop
+};
