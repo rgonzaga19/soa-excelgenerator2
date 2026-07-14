@@ -24,6 +24,10 @@ function createWindow() {
 
 app.whenReady().then(async () => {
 
+    if (app.isPackaged) {
+        process.env.APP_RESOURCES = process.resourcesPath;
+    }
+
     await server.start();
     createWindow();
 

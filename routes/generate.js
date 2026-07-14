@@ -17,12 +17,9 @@ const { fillSheet2 } = require("../services/sheet2Generator");
  * Electron (packaged):
  *   <resources>/templates/master.xlsx
  */
-const isElectron = !!process.versions.electron;
-
-const TEMPLATE_PATH =
-    isElectron && process.resourcesPath
-        ? path.join(process.resourcesPath, "templates", "master.xlsx")
-        : path.join(__dirname, "..", "templates", "master.xlsx");
+const TEMPLATE_PATH = process.env.APP_RESOURCES
+    ? path.join(process.env.APP_RESOURCES, "templates", "master.xlsx")
+    : path.join(__dirname, "..", "templates", "master.xlsx");
 
 // Cache the template in memory so it is only read once.
 let templateBuffer = null;
