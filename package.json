@@ -7,6 +7,7 @@
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
+    "build": "electron-builder",
     "dist": "electron-builder"
   },
   "type": "commonjs",
