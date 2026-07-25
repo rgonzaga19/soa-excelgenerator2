@@ -87,17 +87,16 @@ function renderClaims() {
                         class="epo-field"
                         type="number"
                         min="1"
-                        max="2"
+                        max="${claim.epoType === "beta" ? 1 : 2}"
                         value="${claim.epoQty}"
                         ${claim.hasEpo ? "" : "disabled"}
-                        oninput="validateEpoQty(${index}, this)"
-                        onchange="updateEpoQty(${index}, this.value)"
+                        oninput="updateEpoQty(${index}, this)"
                     >
                     <small
                         id="epoQtyError${index}"
                         style="color:red; display:none;"
                     >
-                        Maximum quantity is 2.
+                        ${claim.epoType === "beta" ? "Beta does not support double dose." : "Maximum quantity is 2."}
                     </small>
 
                 </div>
@@ -248,19 +247,37 @@ function toggleEpo(index, value){
 
 }
 
-function updateEpoQty(index, value) {
+function updateEpoQty(index, input) {
 
-    value = parseInt(value);
+    const claim = appState.claims[index];
+    const maxQty = claim.epoType === "beta" ? 1 : 2;
+
+    // Only allow 1 digit, same as the old validateEpoQty behavior.
+    if (input.value.length > 1) {
+        input.value = input.value.slice(0, 1);
+    }
+
+    let value = parseInt(input.value);
+    const wentOverMax = value > maxQty;
 
     if (isNaN(value) || value < 1) {
         value = 1;
     }
 
-    if (value > 2) {
-        value = 2;
+    if (value > maxQty) {
+        value = maxQty;
     }
 
-    appState.claims[index].epoQty = value;
+    // Commit to state immediately (on every keystroke), so the value
+    // submitted with the form always matches what's shown in the field —
+    // it no longer depends on the field losing focus first.
+    claim.epoQty = value;
+    input.value = value;
+
+    const error = document.getElementById(`epoQtyError${index}`);
+    if (error) {
+        error.style.display = wentOverMax ? "block" : "none";
+    }
 
     renderSummary();
 
@@ -268,9 +285,18 @@ function updateEpoQty(index, value) {
 
 function updateEpoType(index,value){
 
-    appState.claims[index].epoType = value;
+    const claim = appState.claims[index];
 
-    renderSummary();
+    claim.epoType = value;
+
+    // Beta does not support double dose — clamp back to 1 if needed.
+    if (value === "beta" && claim.epoQty > 1) {
+        claim.epoQty = 1;
+    }
+
+    // Re-render so the quantity field's max attribute and error text
+    // (which depend on epoType) reflect the new selection.
+    renderClaims();
 
 }
 
@@ -849,42 +875,6 @@ async function generateExcel() {
 
     }
 
-
-}
-
-function validateEpoQty(index, input) {
-
-    const error =
-        document.getElementById(`epoQtyError${index}`);
-
-    // Only allow 1 digit
-    if (input.value.length > 1) {
-        input.value = input.value.slice(0, 1);
-    }
-
-    let value = parseInt(input.value);
-
-    if (isNaN(value) || value < 1) {
-
-        input.value = 1;
-
-        error.style.display = "none";
-
-        return;
-
-    }
-
-    if (value > 2) {
-
-        input.value = 2;
-
-        error.style.display = "block";
-
-    } else {
-
-        error.style.display = "none";
-
-    }
 
 }
 

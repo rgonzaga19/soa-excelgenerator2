@@ -53,6 +53,17 @@ const STATIC_DRUG_ROWS = [
 ];
 
 function buildEpoRow(claim) {
+
+    const isBeta = claim.epoType === "beta";
+
+    // Beta has no double-dose tier — clamp to 1 regardless of what was
+    // submitted, so a bypassed/stale frontend can't produce a beta row
+    // with qty 2.
+    let epoQty = claim.epoQty ?? 1;
+    if (isBeta && epoQty > 1) {
+        epoQty = 1;
+    }
+
     return {
         itemId: "MED05",
 
@@ -66,7 +77,7 @@ function buildEpoRow(claim) {
                 ? "EPOETIN BETA"
                 : "EPOETIN ALFA",
 
-        qty: claim.epoQty || 1,
+        qty: epoQty,
 
         price:
             claim.epoType === "beta"

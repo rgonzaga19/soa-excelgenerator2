@@ -2,8 +2,15 @@ function getRoomBoardPrices(claim) {
 
     const hasLab = claim.hasLab;
     const hasEpo = claim.hasEpo;
-    const epoQty = Number(claim.epoQty || 0);
     const epoType = (claim.epoType || "alfa").toLowerCase();
+
+    // Beta has no double-dose pricing tier — clamp to 1 regardless of what
+    // the client sent, so a bypassed/stale frontend can't fall through to
+    // the wrong bracket (or the no-epo fallback) below.
+    let epoQty = Number(claim.epoQty || 0);
+    if (epoType === "beta" && epoQty > 1) {
+        epoQty = 1;
+    }
 
     // NO EPO + NO LAB
     if (!hasEpo && !hasLab) {
