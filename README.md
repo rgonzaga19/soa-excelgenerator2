@@ -1,29 +1,16 @@
-# SOA Excel Generator
-
-PhilHealth Statement of Account (SOA) Generator built with Node.js and ExcelJS.
-
-## Features
-
-* Dynamic Sheet 1 generation
-* Dynamic Sheet 2 generation
-* Multiple claims support
-* Fistula / Subkit support
-* EPO Alfa support
-* EPO Beta support
-* Single and Double Dose (Alfa)
-* Laboratory support
-* Dynamic Room & Board pricing
-* Automatic Excel generation based on business rules
-* Preserves required workbook structure for third-party uploads
-
 ---
+
+# Building the Desktop Application (Electron)
+
+This project has been migrated from a browser-based Node.js application to an Electron desktop application. Electron packages the application together with Chromium and Node.js, allowing it to run as a native Windows desktop application without requiring a separate web server.
 
 ## Requirements
 
-* Node.js (LTS recommended)
-* Git
+- Node.js 18 or later
+- npm
+- Git
 
-Verify installation:
+Verify your installation:
 
 ```bash
 node -v
@@ -33,50 +20,16 @@ git --version
 
 ---
 
-## Clone the Repository
+## Install Dependencies
 
-SSH:
-
-```bash
-git clone git@github.com:YOUR_GITHUB_USERNAME/soa-generator.git
-```
-
-or HTTPS:
+Clone the repository and install all required packages.
 
 ```bash
 git clone https://github.com/YOUR_GITHUB_USERNAME/soa-generator.git
-```
 
-Enter the project folder:
-
-```bash
 cd soa-generator
-```
 
----
-
-## Install Dependencies
-
-```bash
 npm install
-```
-
-This will automatically install all required packages from `package.json`.
-
----
-
-## Run the Application
-
-If using the current setup:
-
-```bash
-node server.js
-```
-
-Open your browser:
-
-```
-http://localhost:3000
 ```
 
 ---
@@ -86,11 +39,15 @@ http://localhost:3000
 ```
 soa-generator/
 │
+├── electron/
+│   ├── main.js              # Electron main process
+│   ├── preload.js           # Secure API bridge
+│   └── ipcHandlers.js       # IPC communication
+│
 ├── public/
 │   ├── css/
-│   └── js/
-│
-├── routes/
+│   ├── js/
+│   └── index.html
 │
 ├── services/
 │   ├── sheet1Generator.js
@@ -100,87 +57,115 @@ soa-generator/
 ├── templates/
 │   └── master.xlsx
 │
-├── server.js
 ├── package.json
 └── README.md
 ```
 
 ---
 
-## Current Business Rules
+## Running in Development Mode
 
-### Access Types
+Launch Electron:
 
-* Fistula
-* Subkit
+```bash
+npm start
+```
 
-### EPO Types
+Electron will:
 
-* Alfa
-* Beta
-
-### Laboratory
-
-* Optional laboratory rows
-* Laboratory rows are appended immediately after the corresponding claim on Sheet 2
-
-### Multiple Claims
-
-* Supports multiple claims in one generated workbook
-* Dates are automatically propagated to all related rows
-
-### Room & Board Pricing
-
-Dynamic pricing based on:
-
-* No EPO / No Laboratory
-* No EPO / Laboratory
-* EPO Alfa / No Laboratory
-* EPO Alfa / Laboratory
-* EPO Beta / No Laboratory
-* EPO Beta / Laboratory
-* EPO Alfa Double Dose / No Laboratory
-* EPO Alfa Double Dose / Laboratory
+- Create the desktop window
+- Load the application UI
+- Enable communication between the renderer and Node.js using IPC
+- Generate Excel workbooks locally
 
 ---
 
-## Development Workflow
+## Application Architecture
 
-Check status:
-
-```bash
-git status
+```
+┌───────────────────────────┐
+│       Electron Main       │
+│      (main.js)            │
+└─────────────┬─────────────┘
+              │
+        IPC Communication
+              │
+┌─────────────▼─────────────┐
+│      Renderer Process     │
+│      HTML/CSS/JS UI       │
+└─────────────┬─────────────┘
+              │
+              ▼
+     Business Rule Engine
+              │
+              ▼
+        ExcelJS Services
+              │
+              ▼
+      templates/master.xlsx
+              │
+              ▼
+      Generated SOA Workbook
 ```
 
-Stage changes:
+---
+
+## Building the Executable
+
+To generate a distributable Windows executable, run:
 
 ```bash
-git add .
+npm run build
 ```
 
-Commit:
+Electron Builder will package the application and create the installer.
+
+The generated files are located in:
+
+```
+dist/
+```
+
+Example output:
+
+```
+dist/
+├── SOA Generator Setup.exe
+├── latest.yml
+└── win-unpacked/
+```
+
+---
+
+## Packaging Process
+
+The build process performs the following steps:
+
+1. Compiles the Electron application.
+2. Bundles the renderer files.
+3. Includes all required Node.js dependencies.
+4. Copies the Excel template (`templates/master.xlsx`).
+5. Packages the application into a Windows executable.
+6. Creates an installer using Electron Builder.
+
+---
+
+## Updating the Application
+
+After modifying the source code:
 
 ```bash
-git commit -m "Your commit message"
+npm install
+npm run build
 ```
 
-Push:
-
-```bash
-git push
-```
-
-Pull latest changes:
-
-```bash
-git pull
-```
+A new installer will be generated inside the `dist` folder.
 
 ---
 
 ## Notes
 
-* Do not commit `node_modules/`
-* Do not commit sensitive credentials
-* Keep `templates/master.xlsx` synchronized with the required third-party upload format
-* Always create a Git commit before implementing major business rule changes
+- Do not modify `templates/master.xlsx` unless the SOA format changes.
+- Always test generated workbooks before releasing a new version.
+- Exclude `node_modules` from version control.
+- Commit business rule changes separately for easier maintenance.
