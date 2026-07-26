@@ -20,6 +20,7 @@ const appState = {
 // ── Update information ────────────────────────────────────────────────
 let currentVersion = "";
 let latestUpdateInfo = null;
+let downloadedInstallerPath = null;
 
 
 // ── Application version ────────────────────────────────────────────────
@@ -1153,15 +1154,62 @@ document
         checkForUpdates(true);
 
     });
+    
 document
     .getElementById("downloadUpdateBtn")
-    .addEventListener("click", () => {
+    .addEventListener("click", async () => {
+
+        const button = document.getElementById("downloadUpdateBtn");
+
+        // Installer already downloaded
+        if (downloadedInstallerPath) {
+
+            await window.electronAPI.installUpdate(downloadedInstallerPath);
+
+            return;
+
+        }
 
         if (!latestUpdateInfo) {
             return;
         }
 
-        window.open(latestUpdateInfo.download, "_blank");
+        try {
+
+            button.disabled = true;
+            button.textContent = "Downloading...";
+
+            const result = await window.electronAPI.downloadUpdate(
+                latestUpdateInfo.download
+            );
+
+            if (result.success) {
+
+                downloadedInstallerPath = result.path;
+
+                button.disabled = false;
+                button.textContent = "🚀 Install Update";
+
+                showToast(
+                    "Download complete. Click again to install.",
+                    "success"
+                );
+
+            }
+
+        } catch (err) {
+
+            console.error(err);
+
+            button.disabled = false;
+            button.textContent = "⬇ Download Update";
+
+            showToast(
+                "Failed to download update.",
+                "error"
+            );
+
+        }
 
     });
 

@@ -1,6 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const server = require("./server");
+const fs = require("fs");
+const https = require("https");
+const os = require("os");
 
 let mainWindow;
 
@@ -30,6 +33,99 @@ function createWindow() {
 ipcMain.handle("get-app-version", () => {
     return app.getVersion();
 });
+
+ipcMain.handle("download-update", async (event, downloadUrl) => {
+
+    function download(url, destination, resolve, reject) {
+
+        https.get(url, (response) => {
+
+            // Follow GitHub redirects
+            if (
+                response.statusCode === 301 ||
+                response.statusCode === 302
+            ) {
+
+                return download(
+                    response.headers.location,
+                    destination,
+                    resolve,
+                    reject
+                );
+
+            }
+
+            if (response.statusCode !== 200) {
+
+                return reject(
+                    new Error(`Download failed. Status: ${response.statusCode}`)
+                );
+
+            }
+
+            const file = fs.createWriteStream(destination);
+
+            response.pipe(file);
+
+            file.on("finish", () => {
+
+                file.close();
+
+                resolve({
+                    success: true,
+                    path: destination
+                });
+
+            });
+
+            file.on("error", reject);
+
+        }).on("error", reject);
+
+    }
+
+    return new Promise((resolve, reject) => {
+
+        const tempFile = path.join(
+            os.tmpdir(),
+            "SOA Generator Setup.exe"
+        );
+
+        download(
+            downloadUrl,
+            tempFile,
+            resolve,
+            reject
+        );
+
+    });
+
+});
+
+
+ipcMain.handle("install-update", async (event, installerPath) => {
+
+    try {
+
+        await shell.openPath(installerPath);
+
+        app.quit();
+
+        return {
+            success: true
+        };
+
+    } catch (err) {
+
+        return {
+            success: false,
+            error: err.message
+        };
+
+    }
+
+});
+
 
 app.whenReady().then(async () => {
 
