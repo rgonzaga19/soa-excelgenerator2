@@ -1,3 +1,4 @@
+
 const appState = {
 
     accessType: "fistula",
@@ -16,11 +17,173 @@ const appState = {
 
 };
 
+// ── Update information ────────────────────────────────────────────────
+let currentVersion = "";
+let latestUpdateInfo = null;
+
+
+// ── Application version ────────────────────────────────────────────────
+
+async function loadApplicationVersion() {
+
+    try {
+
+        currentVersion = await window.electronAPI.getAppVersion();
+
+        const version = currentVersion;
+
+        const badge = document.getElementById("versionBadge");
+        if (badge) {
+            badge.textContent = `v${version}`;
+        }
+
+        const about = document.getElementById("aboutVersion");
+        if (about) {
+            about.textContent = version;
+        }
+
+        const footer = document.getElementById("footerVersion");
+        if (footer) {
+            footer.textContent = `Version ${version}`;
+        }
+
+    } catch (err) {
+
+        console.error("Unable to load application version:", err);
+
+    }
+
+}
+
+function isNewerVersion(latest, current) {
+
+    const latestParts = latest.split(".").map(Number);
+    const currentParts = current.split(".").map(Number);
+
+    const maxLength = Math.max(
+        latestParts.length,
+        currentParts.length
+    );
+
+    for (let i = 0; i < maxLength; i++) {
+
+        const latestValue = latestParts[i] || 0;
+        const currentValue = currentParts[i] || 0;
+
+        if (latestValue > currentValue) {
+            return true;
+        }
+
+        if (latestValue < currentValue) {
+            return false;
+        }
+
+    }
+
+    return false;
+
+}
+
+async function checkForUpdates(showLatestMessage = false) {
+
+    try {
+
+        if (!currentVersion) {
+            currentVersion = await window.electronAPI.getAppVersion();
+        }
+
+        const savedKey = getSavedLicenseKey();
+
+        if (!savedKey) {
+
+            document.getElementById("latestVersion").textContent = "-";
+            document.getElementById("updateStatus").textContent =
+                "No license key configured.";
+
+            return;
+
+        }
+
+        const result = await validateLicenseKey(savedKey);
+
+        if (!result.valid) {
+
+            document.getElementById("latestVersion").textContent = "-";
+            document.getElementById("updateStatus").textContent =
+                result.message || "Unable to validate license.";
+
+            return;
+
+        }
+
+        if (!result.update) {
+
+            document.getElementById("latestVersion").textContent = "-";
+            document.getElementById("updateStatus").textContent =
+                "Update information unavailable.";
+
+            return;
+
+        }
+
+        latestUpdateInfo = result.update;
+
+        document.getElementById("latestVersion").textContent =
+            latestUpdateInfo.version;
+
+        if (!isNewerVersion(latestUpdateInfo.version, currentVersion)) {
+
+            document.getElementById("updateStatus").textContent =
+                "✅ You're using the latest version.";
+
+            document.getElementById("releaseNotesContainer").style.display = "none";
+            document.getElementById("downloadUpdateBtn").style.display = "none";
+
+            if (showLatestMessage) {
+                showToast("You're already using the latest version.", "success");
+            }
+
+            return;
+
+        }
+
+        document.getElementById("updateStatus").textContent =
+            `🟢 Version ${latestUpdateInfo.version} is available.`;
+
+        const notes = document.getElementById("releaseNotes");
+
+        notes.innerHTML = "";
+
+        (latestUpdateInfo.notes || []).forEach(note => {
+
+            const li = document.createElement("li");
+            li.textContent = note;
+            notes.appendChild(li);
+
+        });
+
+        document.getElementById("releaseNotesContainer").style.display = "block";
+        document.getElementById("downloadUpdateBtn").style.display = "inline-block";
+
+    }
+    catch (err) {
+
+        console.error(err);
+
+        document.getElementById("updateStatus").textContent =
+            "Unable to check for updates.";
+
+    }
+
+}
+
+
+
 // ── License settings ─────────────────────────────────────────────
 // TODO: replace with your actual Cloudflare Worker URL and adjust the
 // expected response shape below (validateLicenseKey) to match what it
 // actually returns.
-const LICENSE_VALIDATION_URL = "https://beabot-license.gonzagaromel19.workers.dev";
+const LICENSE_VALIDATION_URL = "https://soa-generator-license.gonzagaromel19.workers.dev";
 const LICENSE_STORAGE_KEY = "soaLicenseKey";
 const LICENSE_REQUEST_TIMEOUT_MS = 10000; // matches the Python client's timeout=10
 
@@ -632,7 +795,9 @@ async function validateLicenseKey(key) {
             valid: true,
             owner: data.owner,
             plan: data.plan,
-            expires: data.expires
+            expires: data.expires,
+
+            update: data.update || null
         };
 
     } catch (err) {
@@ -926,8 +1091,16 @@ const closeAbout = document.getElementById("closeAbout");
 
 if (aboutBtn && aboutModal && closeAbout) {
 
-    aboutBtn.onclick = () => {
+    aboutBtn.onclick = async () => {
+
         aboutModal.style.display = "block";
+
+        document.getElementById("latestVersion").textContent = "Checking...";
+        document.getElementById("updateStatus").textContent =
+            "Checking for updates...";
+
+        await checkForUpdates();
+
     };
 
     closeAbout.onclick = () => {
@@ -972,3 +1145,25 @@ document
 document
     .getElementById("clearBtn")
     .addEventListener("click", clearForm);
+
+document
+    .getElementById("checkUpdateBtn")
+    .addEventListener("click", () => {
+
+        checkForUpdates(true);
+
+    });
+document
+    .getElementById("downloadUpdateBtn")
+    .addEventListener("click", () => {
+
+        if (!latestUpdateInfo) {
+            return;
+        }
+
+        window.open(latestUpdateInfo.download, "_blank");
+
+    });
+
+loadApplicationVersion();
+

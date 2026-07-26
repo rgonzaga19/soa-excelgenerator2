@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const server = require("./server");
 
@@ -11,7 +11,12 @@ function createWindow() {
         height: 900,
         autoHideMenuBar: true,
         icon: path.join(__dirname, "public", "images", "logo.ico"),
-        show: false
+        show: false,
+
+        webPreferences: {
+            preload: path.join(__dirname, "preload.js")
+        }
+        
     });
 
     mainWindow.loadURL("http://localhost:3000");
@@ -21,6 +26,10 @@ function createWindow() {
         mainWindow.show();
     });
 }
+
+ipcMain.handle("get-app-version", () => {
+    return app.getVersion();
+});
 
 app.whenReady().then(async () => {
 

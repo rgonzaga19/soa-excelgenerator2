@@ -50,7 +50,9 @@
     </div>
 
     <div class="header-right">
-        <div class="version-badge">v2.0.0</div>
+        <div class="version-badge" id="versionBadge">
+            Loading...
+        </div>
         <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle dark mode">🌙 Dark</button>
         <button id="settingsBtn" class="about-btn" title="License settings">⚙ Settings</button>
         <button id="aboutBtn" class="about-btn">About</button>
@@ -161,7 +163,39 @@
 
         <h2>🏥 SOA Excel Generator</h2>
 
-        <p><b>Version:</b> 2.0.0</p>
+        <p><b>Current Version:</b> <span id="aboutVersion">Loading...</span></p>
+
+        <p><b>Latest Version:</b> <span id="latestVersion">Checking...</span></p>
+
+        <p id="updateStatus">
+            Checking for updates...
+        </p>
+
+        <div id="releaseNotesContainer" style="display:none; margin-top:15px;">
+            <b>Release Notes</b>
+            <ul id="releaseNotes"></ul>
+        </div>
+
+        <div style="margin-top:20px; display:flex; gap:10px;">
+
+            <div class="about-actions">
+
+                <button
+                    id="checkUpdateBtn"
+                    class="btn btn-secondary">
+                    🔄 Check for Updates
+                </button>
+
+                <button
+                    id="downloadUpdateBtn"
+                    class="btn btn-primary"
+                    style="display:none;">
+                    ⬇ Download Update
+                </button>
+
+            </div>
+
+        </div>
 
         <p>Internal PhilHealth Statement of Account Generator.</p>
 
@@ -217,7 +251,9 @@
 <!-- Footer -->
 <footer class="footer">
     <div>© 2026 SOA Excel Generator</div>
-    <div>Version 2.0.0</div>
+    <div id="footerVersion">
+        Version Loading...
+    </div>
     <div>Developed by Romel Gonzaga</div>
 </footer>
 
