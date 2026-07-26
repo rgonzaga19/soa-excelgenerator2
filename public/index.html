@@ -157,63 +157,82 @@
 
 <!-- About Modal -->
 <div id="aboutModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content about-modal-content">
 
         <span id="closeAbout" class="close-btn">&times;</span>
 
-        <h2>🏥 SOA Excel Generator</h2>
+        <!-- Header -->
+        <div class="about-header">
+            <div class="about-icon">🏥</div>
+            <div>
+                <h2>SOA Excel Generator</h2>
+                <p class="about-tagline">Internal PhilHealth Statement of Account Generator</p>
+            </div>
+        </div>
 
-        <p><b>Current Version:</b> <span id="aboutVersion">Loading...</span></p>
+        <!-- Version info -->
+        <div class="version-panel">
+            <div class="version-row">
+                <span class="version-label">Current Version</span>
+                <span class="version-value" id="aboutVersion">Loading...</span>
+            </div>
+            <div class="version-row">
+                <span class="version-label">Latest Version</span>
+                <span class="version-value" id="latestVersion">Checking...</span>
+            </div>
+            <div id="updateStatus" class="update-status-row">
+                Checking for updates...
+            </div>
+        </div>
 
-        <p><b>Latest Version:</b> <span id="latestVersion">Checking...</span></p>
-
-        <p id="updateStatus">
-            Checking for updates...
-        </p>
-
-        <div id="releaseNotesContainer" style="display:none; margin-top:15px;">
-            <b>Release Notes</b>
+        <!-- Release notes -->
+        <div id="releaseNotesContainer" class="release-notes-box" style="display:none;">
+            <h3>Release Notes</h3>
             <ul id="releaseNotes"></ul>
         </div>
 
-        <div style="margin-top:20px; display:flex; gap:10px;">
+        <!-- Update actions -->
+        <div class="about-actions">
 
-            <div class="about-actions">
+            <button
+                id="checkUpdateBtn"
+                class="btn btn-secondary">
+                🔄 Check for Updates
+            </button>
 
-                <button
-                    id="checkUpdateBtn"
-                    class="btn btn-secondary">
-                    🔄 Check for Updates
-                </button>
-
-                <button
-                    id="downloadUpdateBtn"
-                    class="btn btn-primary"
-                    style="display:none;">
-                    ⬇ Download Update
-                </button>
-
-            </div>
+            <button
+                id="downloadUpdateBtn"
+                class="btn btn-primary"
+                style="display:none;">
+                ⬇ Download Update
+            </button>
 
         </div>
 
-        <p>Internal PhilHealth Statement of Account Generator.</p>
+        <div class="about-divider"></div>
 
-        <p>
-            <b>Other tools:</b>
-            <a
-                href="https://rgonzaga19.github.io/pdfsplitter/"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="tool-link"
-            >
-                📄 PDF Splitter
-            </a>
-        </p>
-
-        <p><b>Developer:</b> Romel Gonzaga</p>
-
-        <p>Built with Node.js, Express and ExcelJS.</p>
+        <!-- App meta -->
+        <div class="about-meta">
+            <div class="meta-row">
+                <span class="meta-label">Other Tools</span>
+                <a
+                    href="https://rgonzaga19.github.io/pdfsplitter/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="tool-link"
+                >
+                    📄 PDF Splitter
+                </a>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Developer</span>
+                <span class="meta-value">Romel Gonzaga</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Built With</span>
+                <span class="meta-value">Node.js, Express, ExcelJS</span>
+            </div>
+        </div>
 
     </div>
 </div>

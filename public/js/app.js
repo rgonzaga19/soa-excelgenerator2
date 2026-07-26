@@ -1,4 +1,3 @@
-
 const appState = {
 
     accessType: "fistula",
@@ -1214,4 +1213,3 @@ document
     });
 
 loadApplicationVersion();
-

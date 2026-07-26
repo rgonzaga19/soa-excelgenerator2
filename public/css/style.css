@@ -890,6 +890,208 @@ select:focus {
 
 
 
+/* ── About modal ─────────────────────────────────────────────────
+   Custom layout for the About dialog: icon header, a bordered
+   version panel, a release-notes box, styled action buttons, and
+   a clean meta list — all built on top of the existing .modal /
+   .modal-content shell. */
+.about-modal-content {
+    width: 460px;
+    padding: 30px 32px 28px;
+}
+
+.about-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.about-icon {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.about-header h2 {
+    font-size: 18px;
+    color: var(--heading-blue);
+    margin-bottom: 3px;
+}
+
+.about-tagline {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Version panel */
+.version-panel {
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px 18px 16px;
+    margin-bottom: 16px;
+}
+
+.version-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    font-size: 13px;
+}
+
+.version-row + .version-row {
+    border-top: 1px solid var(--border-light);
+}
+
+.version-label {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.version-value {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.update-status-row {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* Release notes */
+.release-notes-box {
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px 18px 16px;
+    margin-bottom: 16px;
+}
+
+.release-notes-box h3 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+}
+
+.release-notes-box ul {
+    padding-left: 18px;
+}
+
+.release-notes-box li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+/* Update action buttons */
+.about-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.about-actions .btn {
+    flex: 1;
+}
+
+.btn {
+    border: none;
+    border-radius: 10px;
+    padding: 11px 16px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .01em;
+    transition: background .15s, transform .1s, box-shadow .15s, border-color .15s;
+}
+
+.btn-secondary {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-surface-alt);
+    border-color: var(--text-faint);
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--accent-shadow);
+}
+
+.btn-primary:hover {
+    background: var(--accent-btn-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--accent-shadow-strong);
+}
+
+.btn:active {
+    transform: scale(.98);
+    box-shadow: none;
+}
+
+.about-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 0 0 18px;
+}
+
+/* App meta list */
+.about-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+
+.meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+}
+
+.meta-label {
+    color: var(--text-faint);
+    font-weight: 600;
+}
+
+.meta-value {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+@media (max-width: 560px) {
+    .about-modal-content {
+        width: 100%;
+        padding: 26px 22px 22px;
+    }
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
     .dashboard {
