@@ -7,5 +7,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
         ipcRenderer.invoke("download-update", downloadUrl),
 
     installUpdate: (installerPath) =>
-        ipcRenderer.invoke("install-update", installerPath)
+        ipcRenderer.invoke("install-update", installerPath),
+
+    onDownloadProgress: (callback) =>
+        ipcRenderer.on("download-progress", (event, percent) => {
+            callback(percent);
+        })
 });

@@ -65,11 +65,28 @@ ipcMain.handle("download-update", async (event, downloadUrl) => {
 
             const file = fs.createWriteStream(destination);
 
+            const totalSize = parseInt(response.headers["content-length"] || "0", 10);
+            let downloaded = 0;
+
+            response.on("data", (chunk) => {
+                downloaded += chunk.length;
+
+                if (totalSize > 0 && mainWindow) {
+                    const percent = Math.round((downloaded / totalSize) * 100);
+
+                    mainWindow.webContents.send("download-progress", percent);
+                }
+            });
+
             response.pipe(file);
 
             file.on("finish", () => {
 
                 file.close();
+
+                if (mainWindow) {
+                    mainWindow.webContents.send("download-progress", 100);
+                }
 
                 resolve({
                     success: true,

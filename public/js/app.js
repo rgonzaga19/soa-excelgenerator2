@@ -1101,6 +1101,18 @@ if (aboutBtn && aboutModal && closeAbout) {
 
         await checkForUpdates();
 
+        window.electronAPI.onDownloadProgress((percent) => {
+
+            const button = document.getElementById("downloadUpdateBtn");
+
+            if (!button) return;
+
+            if (downloadedInstallerPath) return;
+
+            button.textContent = `Downloading... ${percent}%`;
+
+        });
+
     };
 
     closeAbout.onclick = () => {
