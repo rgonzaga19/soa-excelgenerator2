@@ -67,6 +67,53 @@
         <!-- LEFT PANEL — the only section that scrolls with the page -->
         <div class="left-panel">
 
+            <!-- Batch Generate — upload an Excel file with one row per
+                 person, loop /generate for each row, and zip the results.
+                 Fully client-side (SheetJS + JSZip); no server changes. -->
+            <div class="card">
+                <h2>Batch Generate</h2>
+
+                <p class="batch-hint">
+                    Upload an Excel file with one row per person to generate
+                    multiple SOAs in one go, packaged into a single .zip.
+                </p>
+
+                <div class="field">
+                    <label>Default Claim Period</label>
+                    <div class="batch-period-row">
+                        <select id="batchClaimMonth"></select>
+                        <input type="number" id="batchClaimYear" min="2020" max="2100">
+                    </div>
+                    <small class="batch-hint-inline">
+                        Fills in the month/year when a date in the file
+                        doesn't state one — e.g. a bare day list like
+                        "28,30", or any date missing its year.
+                    </small>
+                </div>
+
+                <div class="field">
+                    <label>Batch Excel File</label>
+                    <input type="file" id="batchFileInput" accept=".xlsx,.xls">
+                    <small id="batchFileError" class="field-error">Unable to read this file. Please use the template.</small>
+                </div>
+
+                <div id="batchPreview" class="batch-preview" style="display:none;"></div>
+
+                <div class="batch-actions">
+                    <button id="downloadTemplateBtn" type="button" class="secondary-btn">⬇ Download Template</button>
+                    <button id="batchGenerateBtn" type="button" class="batch-generate-btn" disabled>📦 Generate Batch (ZIP)</button>
+                </div>
+
+                <div id="batchProgress" class="batch-progress" style="display:none;">
+                    <div class="batch-progress-track">
+                        <div id="batchProgressFill" class="batch-progress-fill"></div>
+                    </div>
+                    <small id="batchProgressText">0 / 0</small>
+                </div>
+
+                <div id="batchLog" class="batch-log" style="display:none;"></div>
+            </div>
+
             <div class="card">
                 <h2>General Settings</h2>
 
@@ -287,6 +334,12 @@
 
 <!-- Toast -->
 <div id="toast" class="toast"></div>
+
+<!-- SheetJS (reads the batch .xlsx / generates the template) and JSZip
+     (packages the generated SOAs into a single .zip download). Both are
+     client-side only — no server changes needed for batch generation. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <script src="/js/app.js"></script>
 

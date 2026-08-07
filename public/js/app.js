@@ -1225,3 +1225,578 @@ document
     });
 
 loadApplicationVersion();
+
+// ── Batch generation ─────────────────────────────────────────────
+// Client-side only: parses an uploaded .xlsx (one row per person, wide
+// claim columns), calls the existing single-item /generate endpoint once
+// per row, and packages every returned .xlsx into one .zip download named
+// from each row's Name column. No server changes required.
+
+const CLAIM_COLUMNS_PER_ROW = 7; // hard cap — mirrors the single-entry form's 7-claim max
+
+function sanitizeFileName(name) {
+
+    const cleaned = String(name || "")
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .replace(/\s+/g, "_")
+        .slice(0, 100);
+
+    return cleaned || "Unnamed";
+
+}
+
+const batchFileInput = document.getElementById("batchFileInput");
+const batchFileError = document.getElementById("batchFileError");
+const batchPreview = document.getElementById("batchPreview");
+const batchGenerateBtn = document.getElementById("batchGenerateBtn");
+const downloadTemplateBtn = document.getElementById("downloadTemplateBtn");
+const batchProgress = document.getElementById("batchProgress");
+const batchProgressFill = document.getElementById("batchProgressFill");
+const batchProgressText = document.getElementById("batchProgressText");
+const batchLog = document.getElementById("batchLog");
+const batchClaimMonth = document.getElementById("batchClaimMonth");
+const batchClaimYear = document.getElementById("batchClaimYear");
+
+// Parsed { name, state, warnings } entries from the most recently loaded file.
+let batchEntries = [];
+
+// ── Default claim period (month/year) ──────────────────────────────
+// Fills in whatever a cell's date doesn't state itself — see
+// parseTreatmentDatesCell()/parseDayListCell() below for exactly when
+// each gets used.
+(function initBatchPeriodDefaults() {
+
+    if (!batchClaimMonth || !batchClaimYear) return;
+
+    const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    const now = new Date();
+
+    monthNames.forEach((label, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i + 1);
+        opt.textContent = label;
+        if (i === now.getMonth()) opt.selected = true;
+        batchClaimMonth.appendChild(opt);
+    });
+
+    batchClaimYear.value = now.getFullYear();
+
+})();
+
+// ── Header + value parsing ───────────────────────────────────────────
+// The uploaded sheet's exact header text varies (line breaks, periods,
+// slashes — "NO. OF CLAIMS" vs "NO OF CLAIMS", "W/ LAB" vs "W LAB"), so
+// headers are matched after stripping everything but letters/digits.
+function normalizeHeader(h) {
+    return String(h).toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+}
+
+function normalizeRowKeys(rawRow) {
+    const out = {};
+    Object.keys(rawRow).forEach(k => {
+        out[normalizeHeader(k)] = rawRow[k];
+    });
+    return out;
+}
+
+const BATCH_HEADERS = {
+    NAME: "NAME OF PATIENT",
+    TREATMENT_DATES: "TREATMENT DATES",
+    CLAIM_COUNT: "NO OF CLAIMS",
+    EPO_ALFA: "DATES OF ERYTHROPOIETIN GIVEN WEEKLY",
+    EPO_BETA: "BETA RECORMON",
+    ACCESS: "DIALYZER CATEGORY",
+    FLUX: "KIT CATEGORY",
+    LAB: "W LAB"
+};
+
+const MONTH_ABBR = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+    jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+};
+
+function monthFromText(text) {
+    return MONTH_ABBR[String(text).slice(0, 3).toLowerCase()] || null;
+}
+
+// Excel serial date number -> JS Date (UTC midnight).
+function excelSerialToDate(serial) {
+    const ms = Math.round((serial - 25569) * 86400 * 1000);
+    const d = new Date(ms);
+    return isNaN(d) ? null : d;
+}
+
+// Reads the "Treatment Dates" cell in any of the shapes the template
+// allows: a real Excel date, "29-Jul", "Jul 28,30", "Jul 27,29,31", or a
+// bare day list ("28,30") that borrows the batch's default month.
+// Returns { days: [1..31], month, year } or null if unreadable.
+function parseTreatmentDatesCell(value, defaultMonth, defaultYear) {
+
+    if (value === undefined || value === null || value === "") return null;
+
+    if (value instanceof Date && !isNaN(value)) {
+        return { days: [value.getDate()], month: value.getMonth() + 1, year: value.getFullYear() };
+    }
+
+    if (typeof value === "number" && isFinite(value)) {
+        const d = excelSerialToDate(value);
+        if (d) return { days: [d.getUTCDate()], month: d.getUTCMonth() + 1, year: d.getUTCFullYear() };
+    }
+
+    const text = String(value).trim();
+    if (!text) return null;
+
+    // "Jul 28,30" / "Jul-28,30" — month name, then a comma-separated day list.
+    let m = text.match(/^([A-Za-z]{3,9})[\s,.\-]+([\d\s,]+)$/);
+    if (m) {
+        const month = monthFromText(m[1]);
+        if (month) {
+            const days = m[2].split(",").map(s => parseInt(s.trim(), 10)).filter(n => n >= 1 && n <= 31);
+            if (days.length) return { days, month, year: defaultYear };
+        }
+    }
+
+    // "29-Jul" / "29 Jul" — day number first, then month name.
+    m = text.match(/^(\d{1,2})[\s,.\-\/]+([A-Za-z]{3,9})$/);
+    if (m) {
+        const month = monthFromText(m[2]);
+        const day = parseInt(m[1], 10);
+        if (month && day >= 1 && day <= 31) return { days: [day], month, year: defaultYear };
+    }
+
+    // Bare day list, no month at all — "28,30" or "29" — borrows the
+    // batch-level default month.
+    if (/^\d{1,2}(\s*,\s*\d{1,2})*$/.test(text)) {
+        const days = text.split(",").map(s => parseInt(s.trim(), 10)).filter(n => n >= 1 && n <= 31);
+        if (days.length) return { days, month: defaultMonth, year: defaultYear };
+    }
+
+    // Last resort — let the browser parse things like "July 29, 2026".
+    const parsed = new Date(text);
+    if (!isNaN(parsed)) {
+        return { days: [parsed.getDate()], month: parsed.getMonth() + 1, year: parsed.getFullYear() };
+    }
+
+    return null;
+
+}
+
+// Reads a "day marker" cell (Erythropoietin dates, Beta Recormon, W/ Lab):
+// a bare day number, a comma-separated list of days, or "NO"/blank meaning
+// none. Returns a Set of day-of-month integers to match against the
+// row's treatment days.
+function parseDayListCell(value) {
+
+    if (value === undefined || value === null || value === "") return new Set();
+    if (value instanceof Date && !isNaN(value)) return new Set([value.getDate()]);
+
+    if (typeof value === "number" && isFinite(value)) {
+        if (value >= 1 && value <= 31) return new Set([Math.round(value)]);
+        const d = excelSerialToDate(value);
+        return d ? new Set([d.getUTCDate()]) : new Set();
+    }
+
+    const text = String(value).trim();
+    if (!text || /^(no|none|n\/a|-)$/i.test(text)) return new Set();
+
+    const days = text.split(",").map(s => parseInt(s.trim(), 10)).filter(n => n >= 1 && n <= 31);
+    return new Set(days);
+
+}
+
+// Converts one raw spreadsheet row into { name, state, warnings }, where
+// state is the same { accessType, fluxType, claims[] } shape generateExcel()
+// already posts to /generate. Each treatment day becomes one claim; a day
+// that also appears in the Erythropoietin/Beta/W-Lab columns picks up
+// hasEpo/epoType/hasLab for that specific claim. A marker day that doesn't
+// match any treatment date is simply unused — there's no claim to attach it to.
+function rowToBatchEntry(rawRow, defaultMonth, defaultYear) {
+
+    const row = normalizeRowKeys(rawRow);
+    const warnings = [];
+
+    const name = String(row[BATCH_HEADERS.NAME] || "").trim();
+
+    const accessType =
+        String(row[BATCH_HEADERS.ACCESS] || "").trim().toLowerCase() === "subkit"
+            ? "subkit"
+            : "fistula";
+
+    const fluxRaw = String(row[BATCH_HEADERS.FLUX] || "").trim().toLowerCase();
+    const fluxType = fluxRaw === "low" || fluxRaw === "low flux" ? "low" : "high";
+
+    const treatment = parseTreatmentDatesCell(row[BATCH_HEADERS.TREATMENT_DATES], defaultMonth, defaultYear);
+
+    if (!treatment || !treatment.days.length) {
+        return {
+            name,
+            state: { accessType, fluxType, claims: [] },
+            warnings: ["Could not read Treatment Dates for this row."]
+        };
+    }
+
+    let days = treatment.days;
+
+    if (days.length > CLAIM_COLUMNS_PER_ROW) {
+        warnings.push(`Treatment Dates lists ${days.length} dates — only the first ${CLAIM_COLUMNS_PER_ROW} were used.`);
+        days = days.slice(0, CLAIM_COLUMNS_PER_ROW);
+    }
+
+    const declaredCount = parseInt(row[BATCH_HEADERS.CLAIM_COUNT], 10);
+    if (!isNaN(declaredCount) && declaredCount !== days.length) {
+        warnings.push(`No. of Claims says ${declaredCount}, but ${days.length} Treatment Date(s) were found.`);
+    }
+
+    const epoAlfaDays = parseDayListCell(row[BATCH_HEADERS.EPO_ALFA]);
+    const epoBetaDays = parseDayListCell(row[BATCH_HEADERS.EPO_BETA]);
+    const labDays = parseDayListCell(row[BATCH_HEADERS.LAB]);
+
+    const month = treatment.month || defaultMonth;
+    const year = treatment.year || defaultYear;
+
+    const claims = days.map(day => {
+
+        const renderDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const hasEpo = epoAlfaDays.has(day) || epoBetaDays.has(day);
+        const epoType = epoBetaDays.has(day) ? "beta" : "alfa";
+
+        return {
+            renderDate,
+            hasEpo,
+            epoQty: 1, // no quantity column in this template — always single dose
+            epoType: hasEpo ? epoType : "alfa",
+            hasLab: labDays.has(day)
+        };
+
+    });
+
+    // A day listed in one of the marker columns but not among this row's
+    // actual Treatment Dates (e.g. a typo like "23" when the claims run
+    // 27/29/31) has nowhere to attach — flag it rather than guessing which
+    // claim it belongs to or silently dropping it.
+    const claimDaySet = new Set(days);
+
+    const flagOrphanDays = (dayList, columnLabel, doseNoun) => {
+        dayList.forEach(d => {
+            if (!claimDaySet.has(d)) {
+                warnings.push(`${columnLabel} lists day ${d}, which doesn't match any Treatment Date — check for a typo; that ${doseNoun} wasn't included.`);
+            }
+        });
+    };
+
+    flagOrphanDays(epoAlfaDays, "Erythropoietin Given", "dose");
+    flagOrphanDays(epoBetaDays, "Beta Recormon", "dose");
+    flagOrphanDays(labDays, "W/ Lab", "lab");
+
+    return { name, state: { accessType, fluxType, claims }, warnings };
+
+}
+
+function downloadBatchTemplate() {
+
+    const headers = [
+        "NAME OF PATIENT",
+        "TREATMENT DATES",
+        "NO. OF CLAIMS",
+        "DATES OF ERYTHROPOIETIN GIVEN\n(WEEKLY)",
+        "BETA RECORMON",
+        "DIALYZER CATEGORY",
+        "KIT CATEGORY",
+        "W/ LAB"
+    ];
+
+    // Same three rows shown in the reference layout — realistic enough to
+    // double as a worked example of every accepted date shape.
+    const sampleRows = [
+        {
+            "NAME OF PATIENT": "ABAO,GREGORIA",
+            "TREATMENT DATES": "29-Jul",
+            "NO. OF CLAIMS": 1,
+            "DATES OF ERYTHROPOIETIN GIVEN\n(WEEKLY)": "",
+            "BETA RECORMON": 29,
+            "DIALYZER CATEGORY": "FISTULA",
+            "KIT CATEGORY": "HIGH FLUX",
+            "W/ LAB": 29
+        },
+        {
+            "NAME OF PATIENT": "ABOGADO, JOVELYN",
+            "TREATMENT DATES": "Jul 28,30",
+            "NO. OF CLAIMS": 2,
+            "DATES OF ERYTHROPOIETIN GIVEN\n(WEEKLY)": "28,30",
+            "BETA RECORMON": "",
+            "DIALYZER CATEGORY": "SUBKIT",
+            "KIT CATEGORY": "LOW FLUX",
+            "W/ LAB": "NO"
+        },
+        {
+            "NAME OF PATIENT": "ALARZAR, CELSO",
+            "TREATMENT DATES": "Jul 27,29,31",
+            "NO. OF CLAIMS": 3,
+            "DATES OF ERYTHROPOIETIN GIVEN\n(WEEKLY)": "31",
+            "BETA RECORMON": "",
+            "DIALYZER CATEGORY": "SUBKIT",
+            "KIT CATEGORY": "LOW FLUX",
+            "W/ LAB": "NO"
+        }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(sampleRows, { header: headers });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Batch");
+
+    const notesSheet = XLSX.utils.aoa_to_sheet([
+        ["How to fill out the Batch sheet"],
+        [""],
+        ["NAME OF PATIENT", "Used as the output file name."],
+        ["TREATMENT DATES", "\"29-Jul\", \"Jul 28,30\", or a real date. If you only type day numbers with no month (e.g. \"28,30\"), the app's Default Claim Period month/year fills the gap."],
+        ["NO. OF CLAIMS", "Informational — the app counts claims from Treatment Dates directly. A mismatch just shows as a warning, it won't block generation."],
+        ["DATES OF ERYTHROPOIETIN GIVEN (WEEKLY)", "Day number(s) EPO Alfa was given. Must match a day already listed in Treatment Dates."],
+        ["BETA RECORMON", "Day number(s) EPO Beta (Recormon) was given. Same matching rule as above."],
+        ["W/ LAB", "Day number a lab was included, or \"NO\" / blank for none."],
+        ["DIALYZER CATEGORY", "FISTULA or SUBKIT."],
+        ["KIT CATEGORY", "HIGH FLUX or LOW FLUX."]
+    ]);
+    XLSX.utils.book_append_sheet(workbook, notesSheet, "Instructions");
+
+    XLSX.writeFile(workbook, "SOA_Batch_Template.xlsx");
+
+}
+
+function readWorkbookRows(file) {
+
+    return new Promise((resolve, reject) => {
+
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+
+            try {
+
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: "array", cellDates: true });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                resolve(XLSX.utils.sheet_to_json(sheet, { defval: "" }));
+
+            } catch (err) {
+
+                reject(err);
+
+            }
+
+        };
+
+        reader.onerror = () => reject(reader.error);
+
+        reader.readAsArrayBuffer(file);
+
+    });
+
+}
+
+if (batchFileInput) {
+
+    batchFileInput.addEventListener("change", async (e) => {
+
+        const file = e.target.files[0];
+
+        batchFileError.style.display = "none";
+        batchPreview.style.display = "none";
+        batchGenerateBtn.disabled = true;
+        batchEntries = [];
+
+        if (!file) return;
+
+        try {
+
+            const rawRows = await readWorkbookRows(file);
+
+            if (!rawRows.length) {
+
+                batchFileError.textContent = "The file has no data rows.";
+                batchFileError.style.display = "block";
+
+                return;
+
+            }
+
+            const defaultMonth = parseInt(batchClaimMonth.value, 10);
+            const defaultYear = parseInt(batchClaimYear.value, 10);
+
+            batchEntries = rawRows.map(row => rowToBatchEntry(row, defaultMonth, defaultYear));
+
+            const missingNames = batchEntries.filter(en => !en.name).length;
+            const noClaims = batchEntries.filter(en => en.state.claims.length === 0).length;
+            const withWarnings = batchEntries.filter(en => en.warnings && en.warnings.length).length;
+            const usable = batchEntries.length - noClaims;
+
+            batchPreview.innerHTML = `
+                <div class="summary-item"><b>Rows found:</b> ${batchEntries.length}</div>
+                <div class="summary-item"><b>Ready to generate:</b> ${usable}</div>
+                ${missingNames ? `<div class="summary-item" style="color:var(--red);"><b>Missing Name:</b> ${missingNames} row(s) — will be labeled "Unnamed".</div>` : ""}
+                ${noClaims ? `<div class="summary-item" style="color:var(--red);"><b>Unreadable Treatment Dates:</b> ${noClaims} row(s) will be skipped.</div>` : ""}
+                ${withWarnings ? `<div class="summary-item" style="color:#b45309;"><b>Warnings:</b> ${withWarnings} row(s) — check the log after generating.</div>` : ""}
+            `;
+            batchPreview.style.display = "block";
+
+            batchGenerateBtn.disabled = usable === 0;
+
+        } catch (err) {
+
+            console.error("Failed to read batch file:", err);
+
+            batchFileError.textContent = "Unable to read this file. Please use the template.";
+            batchFileError.style.display = "block";
+
+        }
+
+    });
+
+}
+
+if (downloadTemplateBtn) {
+    downloadTemplateBtn.addEventListener("click", downloadBatchTemplate);
+}
+
+async function generateBatch() {
+
+    const validEntries = batchEntries.filter(en => en.state.claims.length > 0);
+
+    if (!validEntries.length) return;
+
+    const savedKey = getSavedLicenseKey();
+
+    if (!savedKey) {
+
+        showToast("Please enter your license key in Settings before generating.", "warning");
+        openSettingsModal();
+
+        return;
+
+    }
+
+    batchGenerateBtn.disabled = true;
+    batchGenerateBtn.textContent = "Validating license...";
+
+    const licenseResult = await validateLicenseKey(savedKey);
+
+    if (!licenseResult.valid) {
+
+        batchGenerateBtn.disabled = false;
+        batchGenerateBtn.textContent = "📦 Generate Batch (ZIP)";
+
+        showToast(licenseResult.message || "Invalid license key. Please check Settings.", "error");
+        openSettingsModal();
+
+        return;
+
+    }
+
+    batchProgress.style.display = "block";
+    batchLog.style.display = "block";
+    batchLog.innerHTML = "";
+    batchProgressFill.style.width = "0%";
+    batchProgressText.textContent = `0 / ${validEntries.length}`;
+
+    const zip = new JSZip();
+    const usedNames = new Map();
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < validEntries.length; i++) {
+
+        const entry = validEntries[i];
+        const label = entry.name || "Unnamed";
+        const warningSuffix = entry.warnings && entry.warnings.length
+            ? ` — ⚠ ${entry.warnings.join(" ")}`
+            : "";
+
+        batchGenerateBtn.textContent = `Generating ${i + 1}/${validEntries.length}...`;
+
+        try {
+
+            const response = await fetch("/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(entry.state)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+
+            const blob = await response.blob();
+
+            let fileName = sanitizeFileName(label);
+            const priorCount = usedNames.get(fileName) || 0;
+
+            usedNames.set(fileName, priorCount + 1);
+
+            // Same name appears more than once in the sheet — number the
+            // repeats instead of one silently overwriting another in the zip.
+            if (priorCount > 0) {
+                fileName = `${fileName}_${priorCount + 1}`;
+            }
+
+            zip.file(`${fileName}.xlsx`, blob);
+            successCount++;
+
+            batchLog.innerHTML += `<div class="summary-item">✅ ${label}${warningSuffix}</div>`;
+
+        } catch (err) {
+
+            console.error(`Batch row failed (${label}):`, err);
+            failCount++;
+
+            batchLog.innerHTML += `<div class="summary-item" style="color:var(--red);">❌ ${label} — ${err.message}</div>`;
+
+        }
+
+        const pct = Math.round(((i + 1) / validEntries.length) * 100);
+
+        batchProgressFill.style.width = `${pct}%`;
+        batchProgressText.textContent = `${i + 1} / ${validEntries.length}`;
+
+    }
+
+    if (successCount > 0) {
+
+        batchGenerateBtn.textContent = "Packaging ZIP...";
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = window.URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        const stamp = new Date().toISOString().split("T")[0];
+
+        a.href = url;
+        a.download = `SOA_Batch_${stamp}.zip`;
+
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        window.URL.revokeObjectURL(url);
+
+    }
+
+    batchGenerateBtn.disabled = false;
+    batchGenerateBtn.textContent = "📦 Generate Batch (ZIP)";
+
+    showToast(
+        failCount === 0
+            ? `Batch complete — ${successCount} file(s) zipped.`
+            : `Batch finished with errors — ${successCount} succeeded, ${failCount} failed.`,
+        failCount === 0 ? "success" : "warning"
+    );
+
+}
+
+if (batchGenerateBtn) {
+    batchGenerateBtn.addEventListener("click", generateBatch);
+}

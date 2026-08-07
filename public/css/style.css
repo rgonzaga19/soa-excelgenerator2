@@ -769,6 +769,153 @@ select:focus {
     display: none;
 }
 
+/* ── Batch Generate card ─────────────────────────────────────────
+   Mirrors #generateBtn / #clearBtn (solid green primary action,
+   bordered secondary) and .summary-item (per-row preview / log
+   lines), so the batch flow feels native to the rest of the app
+   rather than a bolted-on widget. */
+.batch-hint {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-top: -6px;
+    margin-bottom: 4px;
+}
+
+.field input[type="file"] {
+    width: 100%;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.batch-preview {
+    margin-top: 14px;
+    padding: 4px 2px 0;
+}
+
+.batch-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.batch-actions button {
+    flex: 1;
+    min-width: 140px;
+}
+
+#downloadTemplateBtn {
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    padding: 11px 20px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+#downloadTemplateBtn:hover {
+    background: var(--bg-surface-alt);
+    border-color: var(--text-faint);
+    color: var(--text-secondary);
+}
+
+.batch-generate-btn {
+    background: var(--green);
+    color: #fff;
+    border: none;
+    padding: 11px 20px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .01em;
+    box-shadow: 0 2px 8px var(--green-shadow);
+    transition: background .15s, transform .1s, box-shadow .15s;
+}
+
+.batch-generate-btn:hover:not(:disabled) {
+    background: var(--green-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--green-shadow-strong);
+}
+
+.batch-generate-btn:active:not(:disabled) {
+    transform: scale(.98);
+    box-shadow: none;
+}
+
+.batch-generate-btn:disabled {
+    background: var(--disabled-bg);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.batch-progress {
+    margin-top: 16px;
+}
+
+.batch-progress-track {
+    height: 8px;
+    border-radius: 6px;
+    background: var(--bg-disabled);
+    overflow: hidden;
+}
+
+.batch-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 6px;
+    transition: width .2s ease;
+}
+
+#batchProgressText {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-faint);
+    text-align: right;
+}
+
+.batch-log {
+    margin-top: 12px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.batch-log .summary-item {
+    font-size: 12.5px;
+}
+
+.batch-period-row {
+    display: flex;
+    gap: 8px;
+}
+
+.batch-period-row select {
+    flex: 1.4;
+}
+
+.batch-period-row input[type="number"] {
+    flex: 1;
+}
+
+.batch-hint-inline {
+    display: block;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    line-height: 1.5;
+    margin-top: 6px;
+}
+
 /* ── Footer ── */
 .footer {
     margin-top: 40px;
