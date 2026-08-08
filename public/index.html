@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOA Excel Generator</title>
-    <link rel="icon" type="image/svg+xml" href="/images/logo.ico">
+    <link rel="icon" type="image/x-icon" href="/images/logo.ico">
 
     <!--
         Applies the saved (or system-default) theme before the stylesheet
@@ -335,11 +335,13 @@
 <!-- Toast -->
 <div id="toast" class="toast"></div>
 
-<!-- SheetJS (reads the batch .xlsx / generates the template) and JSZip
-     (packages the generated SOAs into a single .zip download). Both are
-     client-side only — no server changes needed for batch generation. -->
+<!-- SheetJS (reads the batch .xlsx) and JSZip (packages generated SOAs into
+     a .zip). ExcelJS builds the downloadable template — unlike SheetJS's
+     free build, it can write real cell styling (bold, fill, borders,
+     wrap text), which is what makes the template readable out of the box. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 
 <script src="/js/app.js"></script>
 

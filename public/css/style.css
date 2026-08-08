@@ -348,12 +348,64 @@ body {
     color: var(--accent-strong);
 }
 
+/* Custom-drawn checkbox (appearance:none) rather than relying on the
+   native control — most browsers ignore border-width on a native
+   checkbox in favor of the OS theme, so that's the only reliable way
+   to make Has EPO vs Laboratory actually look different at a glance,
+   not just read different in the label text. */
 .checkbox-field input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    box-sizing: border-box;
     width: 20px;
     height: 20px;
-    accent-color: var(--accent);
+    border: 2px solid var(--border-strong);
+    border-radius: 5px;
+    background: var(--bg-surface);
     cursor: pointer;
     flex-shrink: 0;
+    position: relative;
+    transition: background .15s, border-color .15s;
+}
+
+.checkbox-field input[type="checkbox"]:hover {
+    border-color: var(--text-faint);
+}
+
+.checkbox-field input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.checkbox-field input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.checkbox-field input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-focus-ring);
+}
+
+/* Laboratory's border is half the thickness of Has EPO's (1px vs 2px) —
+   a deliberately different weight so the two toggles are distinguishable
+   by sight, not just by which label happens to be above them. */
+.checkbox-field--lab input[type="checkbox"] {
+    border-width: 1px;
+}
+
+.checkbox-field--lab input[type="checkbox"]:checked::after {
+    left: 6.5px;
+    top: 2.5px;
+    width: 4px;
+    height: 9px;
 }
 
 /* ── Number input (general settings) ── */
@@ -491,6 +543,18 @@ body {
     color: var(--text-primary);
     background: var(--bg-surface);
     transition: border-color .2s, box-shadow .2s;
+}
+
+/* EPO Type's <select> has no natural reason to stretch to the full grid
+   column, and EPO Quantity (a 1-2 digit number) shouldn't either — give
+   both the same fixed, compact width instead of Quantity filling its
+   whole cell while Type sits narrow beside it. */
+.claim-grid select.epo-field {
+    width: 100px;
+}
+
+.claim-grid input[type="number"].epo-field--qty {
+    width: 100px;
 }
 
 .claim-grid input[type="number"].epo-field:disabled {
@@ -786,8 +850,35 @@ select:focus {
     width: 100%;
     font-size: 13px;
     color: var(--text-secondary);
-    padding: 8px 10px;
+    padding: 6px;
     cursor: pointer;
+    display: block;
+}
+
+/* The native "Choose File" button ignores the app's usual input styling
+   entirely (it's a shadow-DOM control) — style it explicitly via the
+   standard pseudo-element plus the older WebKit one, so it reads as part
+   of this app instead of a bare OS-default button. */
+.field input[type="file"]::file-selector-button,
+.field input[type="file"]::-webkit-file-upload-button {
+    margin-right: 12px;
+    padding: 8px 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    background: var(--bg-surface-alt);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+.field input[type="file"]:hover::file-selector-button,
+.field input[type="file"]:hover::-webkit-file-upload-button {
+    background: var(--accent-bg);
+    border-color: var(--accent-hover);
+    color: var(--accent-strong);
 }
 
 .batch-preview {

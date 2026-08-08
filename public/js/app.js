@@ -180,9 +180,6 @@ async function checkForUpdates(showLatestMessage = false) {
 
 
 // ── License settings ─────────────────────────────────────────────
-// TODO: replace with your actual Cloudflare Worker URL and adjust the
-// expected response shape below (validateLicenseKey) to match what it
-// actually returns.
 const LICENSE_VALIDATION_URL = "https://soa-generator-license.gonzagaromel19.workers.dev";
 const LICENSE_STORAGE_KEY = "soaLicenseKey";
 const LICENSE_REQUEST_TIMEOUT_MS = 10000; // matches the Python client's timeout=10
@@ -231,7 +228,7 @@ function renderClaims() {
 
                     <label>Has EPO</label>
 
-                    <label class="checkbox-field">
+                    <label class="checkbox-field checkbox-field--epo">
                         <input
                             type="checkbox"
                             ${claim.hasEpo ? "checked" : ""}
@@ -244,23 +241,16 @@ function renderClaims() {
 
                 <div>
 
-                    <label>EPO Quantity</label>
+                    <label>Include Laboratory</label>
 
-                    <input
-                        class="epo-field"
-                        type="number"
-                        min="1"
-                        max="${claim.epoType === "beta" ? 1 : 2}"
-                        value="${claim.epoQty}"
-                        ${claim.hasEpo ? "" : "disabled"}
-                        oninput="updateEpoQty(${index}, this)"
-                    >
-                    <small
-                        id="epoQtyError${index}"
-                        style="color:red; display:none;"
-                    >
-                        ${claim.epoType === "beta" ? "Beta does not support double dose." : "Maximum quantity is 2."}
-                    </small>
+                    <label class="checkbox-field checkbox-field--lab">
+                        <input
+                            type="checkbox"
+                            ${claim.hasLab ? "checked" : ""}
+                            onchange="toggleLab(${index})"
+                        >
+                        <span>${claim.hasLab ? "Yes" : "No"}</span>
+                    </label>
 
                 </div>
 
@@ -294,16 +284,23 @@ function renderClaims() {
 
                 <div>
 
-                    <label>Include Laboratory</label>
+                    <label>EPO Quantity</label>
 
-                    <label class="checkbox-field">
-                        <input
-                            type="checkbox"
-                            ${claim.hasLab ? "checked" : ""}
-                            onchange="toggleLab(${index})"
-                        >
-                        <span>${claim.hasLab ? "Yes" : "No"}</span>
-                    </label>
+                    <input
+                        class="epo-field epo-field--qty"
+                        type="number"
+                        min="1"
+                        max="${claim.epoType === "beta" ? 1 : 2}"
+                        value="${claim.epoQty}"
+                        ${claim.hasEpo ? "" : "disabled"}
+                        oninput="updateEpoQty(${index}, this)"
+                    >
+                    <small
+                        id="epoQtyError${index}"
+                        style="color:red; display:none;"
+                    >
+                        ${claim.epoType === "beta" ? "Beta does not support double dose." : "Maximum quantity is 2."}
+                    </small>
 
                 </div>
 
@@ -904,9 +901,7 @@ async function generateExcel() {
         document.getElementById("systemStatus").textContent =
             "🟡 Validating license...";
 
-        console.time("license-validation");
         const licenseResult = await validateLicenseKey(savedKey);
-        console.timeEnd("license-validation");
 
         if (!licenseResult.valid) {
 
@@ -949,14 +944,11 @@ async function generateExcel() {
         loadingText.textContent = "Generating Excel...";
         btn.textContent = "Generating...";
 
-    console.log("Generate clicked");
-
     try {
 
         document.getElementById("systemStatus").textContent =
             "🟡 Generating Excel...";
 
-        console.time("excel-generation-request");
         const response = await fetch("/generate", {
             method: "POST",
             headers: {
@@ -965,11 +957,7 @@ async function generateExcel() {
             body: JSON.stringify(appState)
         });
 
-        console.log(response);
-
         if (!response.ok) {
-
-            console.timeEnd("excel-generation-request");
 
             overlay.style.display = "none";
 
@@ -990,7 +978,6 @@ async function generateExcel() {
         }
 
         const blob = await response.blob();
-        console.timeEnd("excel-generation-request");
 
         const url = window.URL.createObjectURL(blob);
 
@@ -1386,10 +1373,61 @@ function parseTreatmentDatesCell(value, defaultMonth, defaultYear) {
 
 }
 
-// Reads a "day marker" cell (Erythropoietin dates, Beta Recormon, W/ Lab):
-// a bare day number, a comma-separated list of days, or "NO"/blank meaning
-// none. Returns a Set of day-of-month integers to match against the
-// row's treatment days.
+// Reads a "day marker" cell (Erythropoietin dates, Beta Recormon): a bare
+// day number (qty 1), "day(N)" for an explicit quantity, or the same day
+// repeated (each occurrence adds 1) — e.g. "27(2),31" or "27,27,31,31".
+// Returns a Map<day, quantity>.
+function parseDayQtyListCell(value) {
+
+    const result = new Map();
+
+    if (value === undefined || value === null || value === "") return result;
+
+    const addDay = (day, qty) => {
+        if (day < 1 || day > 31) return;
+        result.set(day, (result.get(day) || 0) + qty);
+    };
+
+    if (value instanceof Date && !isNaN(value)) {
+        addDay(value.getDate(), 1);
+        return result;
+    }
+
+    if (typeof value === "number" && isFinite(value)) {
+        if (value >= 1 && value <= 31) {
+            addDay(Math.round(value), 1);
+        } else {
+            const d = excelSerialToDate(value);
+            if (d) addDay(d.getUTCDate(), 1);
+        }
+        return result;
+    }
+
+    const text = String(value).trim();
+    if (!text || /^(no|none|n\/a|-)$/i.test(text)) return result;
+
+    text.split(",").forEach(token => {
+
+        const t = token.trim();
+        const m = t.match(/^(\d{1,2})(?:\((\d+)\))?$/);
+
+        if (!m) return;
+
+        const day = parseInt(m[1], 10);
+        const qty = m[2] ? parseInt(m[2], 10) : 1;
+
+        addDay(day, qty);
+
+    });
+
+    return result;
+
+}
+
+// Reads a "day marker" cell with no quantity concept (W/ Lab): a bare day
+// number, a comma-separated list of days, or "NO"/blank meaning none.
+// Returns a Set of day-of-month integers to match against the row's
+// treatment days.
 function parseDayListCell(value) {
 
     if (value === undefined || value === null || value === "") return new Set();
@@ -1452,8 +1490,8 @@ function rowToBatchEntry(rawRow, defaultMonth, defaultYear) {
         warnings.push(`No. of Claims says ${declaredCount}, but ${days.length} Treatment Date(s) were found.`);
     }
 
-    const epoAlfaDays = parseDayListCell(row[BATCH_HEADERS.EPO_ALFA]);
-    const epoBetaDays = parseDayListCell(row[BATCH_HEADERS.EPO_BETA]);
+    const epoAlfaQty = parseDayQtyListCell(row[BATCH_HEADERS.EPO_ALFA]);
+    const epoBetaQty = parseDayQtyListCell(row[BATCH_HEADERS.EPO_BETA]);
     const labDays = parseDayListCell(row[BATCH_HEADERS.LAB]);
 
     const month = treatment.month || defaultMonth;
@@ -1462,13 +1500,24 @@ function rowToBatchEntry(rawRow, defaultMonth, defaultYear) {
     const claims = days.map(day => {
 
         const renderDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const hasEpo = epoAlfaDays.has(day) || epoBetaDays.has(day);
-        const epoType = epoBetaDays.has(day) ? "beta" : "alfa";
+
+        const inBeta = epoBetaQty.has(day);
+        const inAlfa = epoAlfaQty.has(day);
+        const hasEpo = inAlfa || inBeta;
+        const epoType = inBeta ? "beta" : "alfa";
+
+        let epoQty = hasEpo ? (inBeta ? epoBetaQty.get(day) : epoAlfaQty.get(day)) : 1;
+        const maxQty = epoType === "beta" ? 1 : 2;
+
+        if (epoQty > maxQty) {
+            warnings.push(`${epoType === "beta" ? "Beta Recormon" : "Erythropoietin Given"} on day ${day} lists quantity ${epoQty}, but ${epoType === "beta" ? "Beta" : "Alfa"} allows max ${maxQty} — clamped to ${maxQty}.`);
+            epoQty = maxQty;
+        }
 
         return {
             renderDate,
             hasEpo,
-            epoQty: 1, // no quantity column in this template — always single dose
+            epoQty: hasEpo ? epoQty : 1,
             epoType: hasEpo ? epoType : "alfa",
             hasLab: labDays.has(day)
         };
@@ -1481,25 +1530,36 @@ function rowToBatchEntry(rawRow, defaultMonth, defaultYear) {
     // claim it belongs to or silently dropping it.
     const claimDaySet = new Set(days);
 
-    const flagOrphanDays = (dayList, columnLabel, doseNoun) => {
-        dayList.forEach(d => {
+    const flagOrphanDays = (dayIterable, columnLabel, doseNoun) => {
+        dayIterable.forEach(d => {
             if (!claimDaySet.has(d)) {
                 warnings.push(`${columnLabel} lists day ${d}, which doesn't match any Treatment Date — check for a typo; that ${doseNoun} wasn't included.`);
             }
         });
     };
 
-    flagOrphanDays(epoAlfaDays, "Erythropoietin Given", "dose");
-    flagOrphanDays(epoBetaDays, "Beta Recormon", "dose");
+    flagOrphanDays(Array.from(epoAlfaQty.keys()), "Erythropoietin Given", "dose");
+    flagOrphanDays(Array.from(epoBetaQty.keys()), "Beta Recormon", "dose");
     flagOrphanDays(labDays, "W/ Lab", "lab");
 
     return { name, state: { accessType, fluxType, claims }, warnings };
 
 }
 
-function downloadBatchTemplate() {
+async function downloadBatchTemplate() {
 
-    const headers = [
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Batch");
+
+    // Uniform column width across all 8 columns — matches the reference
+    // sheet, which was manually widened evenly rather than sized per
+    // column content. Keeping it uniform is what actually reads clearly.
+    sheet.columns = [
+        { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 },
+        { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 }
+    ];
+
+    const headerRow = sheet.addRow([
         "NAME OF PATIENT",
         "TREATMENT DATES",
         "NO. OF CLAIMS",
@@ -1508,62 +1568,78 @@ function downloadBatchTemplate() {
         "DIALYZER CATEGORY",
         "KIT CATEGORY",
         "W/ LAB"
-    ];
+    ]);
 
-    // Same three rows shown in the reference layout — realistic enough to
-    // double as a worked example of every accepted date shape.
+    headerRow.height = 48;
+    headerRow.eachCell(cell => {
+        cell.font = { bold: true };
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    });
+
+    // Same rows as the working reference sheet — the three real examples
+    // plus all four alfa-dose-quantity notation examples, so the template
+    // teaches the "27(2)" / repeated-day syntax by example, not just prose.
     const sampleRows = [
-        {
-            "NAME OF PATIENT": "ABAO,GREGORIA",
-            "TREATMENT DATES": "29-Jul",
-            "NO. OF CLAIMS": 1,
-            "DATES OF ERYTHROPOIETIN GIVEN\n(WEEKLY)": "",
-            "BETA RECORMON": 29,
-            "DIALYZER CATEGORY": "FISTULA",
-            "KIT CATEGORY": "HIGH FLUX",
-            "W/ LAB": 29
-        },
-        {
-            "NAME OF PATIENT": "ABOGADO, JOVELYN",
-            "TREATMENT DATES": "Jul 28,30",
-            "NO. OF CLAIMS": 2,
-            "DATES OF ERYTHROPOIETIN GIVEN\n(WEEKLY)": "28,30",
-            "BETA RECORMON": "",
-            "DIALYZER CATEGORY": "SUBKIT",
-            "KIT CATEGORY": "LOW FLUX",
-            "W/ LAB": "NO"
-        },
-        {
-            "NAME OF PATIENT": "ALARZAR, CELSO",
-            "TREATMENT DATES": "Jul 27,29,31",
-            "NO. OF CLAIMS": 3,
-            "DATES OF ERYTHROPOIETIN GIVEN\n(WEEKLY)": "31",
-            "BETA RECORMON": "",
-            "DIALYZER CATEGORY": "SUBKIT",
-            "KIT CATEGORY": "LOW FLUX",
-            "W/ LAB": "NO"
-        }
+        ["ABAO,GREGORIA", "29-Jul", 1, "", 29, "FISTULA", "HIGH FLUX", 29],
+        ["ABOGADO, JOVELYN", "Jul 28,30", 2, "28,30", "", "SUBKIT", "LOW FLUX", "28"],
+        ["ALARZAR, CELSO", "Jul 27,29,31", 3, "27,31", "", "SUBKIT", "LOW FLUX", "NO"],
+        ["EXAMPLE 1", "Jul 27,31", 2, "27(2),31", "", "SUBKIT", "LOW FLUX", "NO"],
+        ["EXAMPLE 2", "Jul 27,31", 2, "27,31(2)", "", "SUBKIT", "LOW FLUX", "NO"],
+        ["EXAMPLE 3", "Jul 27,31", 2, "27(2),31(2)", "", "SUBKIT", "LOW FLUX", "NO"],
+        ["EXAMPLE 4", "Jul 27,31", 2, "27,27,31,31", "", "SUBKIT", "HIGH FLUX", "NO"]
     ];
 
-    const worksheet = XLSX.utils.json_to_sheet(sampleRows, { header: headers });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Batch");
+    sampleRows.forEach(values => {
+        const row = sheet.addRow(values);
+        row.eachCell(cell => {
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+    });
 
-    const notesSheet = XLSX.utils.aoa_to_sheet([
-        ["How to fill out the Batch sheet"],
-        [""],
+    sheet.views = [{ state: "frozen", ySplit: 1 }];
+
+    // ── Instructions sheet ──
+    const notes = workbook.addWorksheet("Instructions");
+    notes.columns = [{ width: 40 }, { width: 90 }];
+
+    const title = notes.addRow(["How to fill out the Batch sheet"]);
+    title.getCell(1).font = { bold: true, size: 13 };
+    notes.addRow([]);
+
+    const noteLines = [
         ["NAME OF PATIENT", "Used as the output file name."],
         ["TREATMENT DATES", "\"29-Jul\", \"Jul 28,30\", or a real date. If you only type day numbers with no month (e.g. \"28,30\"), the app's Default Claim Period month/year fills the gap."],
         ["NO. OF CLAIMS", "Informational — the app counts claims from Treatment Dates directly. A mismatch just shows as a warning, it won't block generation."],
-        ["DATES OF ERYTHROPOIETIN GIVEN (WEEKLY)", "Day number(s) EPO Alfa was given. Must match a day already listed in Treatment Dates."],
-        ["BETA RECORMON", "Day number(s) EPO Beta (Recormon) was given. Same matching rule as above."],
+        ["DATES OF ERYTHROPOIETIN GIVEN (WEEKLY)", "Day number(s) EPO Alfa was given — must match a day already listed in Treatment Dates. A second dose on the same day: write \"27(2)\", or list the day twice, e.g. \"27,27\". Max 2 doses per day."],
+        ["BETA RECORMON", "Day number(s) EPO Beta (Recormon) was given. Same matching and dose-quantity rules as above, but max 1 dose per day."],
         ["W/ LAB", "Day number a lab was included, or \"NO\" / blank for none."],
         ["DIALYZER CATEGORY", "FISTULA or SUBKIT."],
         ["KIT CATEGORY", "HIGH FLUX or LOW FLUX."]
-    ]);
-    XLSX.utils.book_append_sheet(workbook, notesSheet, "Instructions");
+    ];
 
-    XLSX.writeFile(workbook, "SOA_Batch_Template.xlsx");
+    noteLines.forEach(([label, desc]) => {
+        const row = notes.addRow([label, desc]);
+        row.getCell(1).font = { bold: true };
+        row.getCell(1).alignment = { vertical: "top" };
+        row.getCell(2).alignment = { vertical: "top", wrapText: true };
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = "SOA_Batch_Template.xlsx";
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
 
 }
 
@@ -1660,7 +1736,12 @@ if (batchFileInput) {
 }
 
 if (downloadTemplateBtn) {
-    downloadTemplateBtn.addEventListener("click", downloadBatchTemplate);
+    downloadTemplateBtn.addEventListener("click", () => {
+        downloadBatchTemplate().catch(err => {
+            console.error("Failed to build template file:", err);
+            showToast("Couldn't build the template file. Please try again.", "error");
+        });
+    });
 }
 
 async function generateBatch() {
