@@ -92,7 +92,7 @@ async function checkForUpdates(showLatestMessage = false) {
             currentVersion = await window.electronAPI.getAppVersion();
         }
 
-        const savedKey = getSavedLicenseKey();
+        const savedKey = await getSavedLicenseKey();
 
         if (!savedKey) {
 
@@ -181,7 +181,6 @@ async function checkForUpdates(showLatestMessage = false) {
 
 // ── License settings ─────────────────────────────────────────────
 const LICENSE_VALIDATION_URL = "https://soa-generator-license.gonzagaromel19.workers.dev";
-const LICENSE_STORAGE_KEY = "soaLicenseKey";
 const LICENSE_REQUEST_TIMEOUT_MS = 10000; // matches the Python client's timeout=10
 
 const claimsContainer = document.getElementById("claimsContainer");
@@ -618,22 +617,36 @@ document
 // actually confirmed the key against the server.
 let lastLicenseInfo = null;
 
-function getSavedLicenseKey() {
-    return (localStorage.getItem(LICENSE_STORAGE_KEY) || "").trim();
+// The license key is persisted by the main process to a file in the
+// app's userData folder (see electron-main.js) rather than renderer
+// localStorage — a synchronous main-process file write can't be lost to
+// the storage-flush-vs-quit race that localStorage was subject to.
+async function getSavedLicenseKey() {
+
+    try {
+        return (await window.electronAPI.getLicenseKey()) || "";
+    } catch (err) {
+        console.error("Unable to read saved license key:", err);
+        return "";
+    }
+
 }
 
-function saveLicenseKey(key) {
-    localStorage.setItem(LICENSE_STORAGE_KEY, key.trim());
+async function saveLicenseKey(key) {
+
+    await window.electronAPI.saveLicenseKey(key.trim());
+
     // A newly-entered key hasn't been validated yet — drop any cached
     // info from a previous (different) key so the status display doesn't
     // show stale owner/plan details for a key that's since changed.
     lastLicenseInfo = null;
+
 }
 
-function updateLicenseStatusText() {
+async function updateLicenseStatusText() {
 
     const statusEl = document.getElementById("licenseStatus");
-    const savedKey = getSavedLicenseKey();
+    const savedKey = await getSavedLicenseKey();
 
     if (!savedKey) {
         statusEl.textContent = "No license key saved yet.";
@@ -681,17 +694,21 @@ function updateLicenseStatusText() {
 
 }
 
-function openSettingsModal() {
+async function openSettingsModal() {
 
     const modal = document.getElementById("settingsModal");
     const input = document.getElementById("licenseKeyInput");
 
-    input.value = getSavedLicenseKey();
     document.getElementById("licenseError").style.display = "none";
 
-    updateLicenseStatusText();
-
+    // Show the modal immediately rather than waiting on the file read —
+    // it's a fast local read, but there's no reason to make the modal's
+    // appearance depend on it.
     modal.style.display = "block";
+
+    input.value = await getSavedLicenseKey();
+
+    await updateLicenseStatusText();
 
 }
 
@@ -831,7 +848,7 @@ document
 
 document
     .getElementById("saveLicenseBtn")
-    .addEventListener("click", () => {
+    .addEventListener("click", async () => {
 
         const input = document.getElementById("licenseKeyInput");
         const error = document.getElementById("licenseError");
@@ -845,9 +862,9 @@ document
 
         error.style.display = "none";
 
-        saveLicenseKey(key);
+        await saveLicenseKey(key);
 
-        updateLicenseStatusText();
+        await updateLicenseStatusText();
 
         showToast("License key saved.", "success");
 
@@ -872,7 +889,7 @@ async function generateExcel() {
 
         }
 
-        const savedKey = getSavedLicenseKey();
+        const savedKey = await getSavedLicenseKey();
 
         if (!savedKey) {
 
@@ -1069,6 +1086,8 @@ function clearForm() {
     }
 
     renderClaims();
+
+    clearBatchSection();
 
 }
 
@@ -1275,6 +1294,46 @@ let batchEntries = [];
 
 })();
 
+// Resets the whole Batch Generate card back to its just-loaded state:
+// clears the selected file, the parsed entries, the preview/warning
+// text, any in-progress log/progress bar, and puts the Default Claim
+// Period back to the current month/year. Called by clearForm() (the
+// main "Clear Form" button) so clearing the form clears batch state too.
+function clearBatchSection() {
+
+    batchEntries = [];
+
+    if (batchFileInput) batchFileInput.value = "";
+
+    if (batchFileError) batchFileError.style.display = "none";
+
+    if (batchPreview) {
+        batchPreview.style.display = "none";
+        batchPreview.innerHTML = "";
+    }
+
+    if (batchGenerateBtn) {
+        batchGenerateBtn.disabled = true;
+        batchGenerateBtn.textContent = "📦 Generate Batch (ZIP)";
+    }
+
+    if (batchProgress) batchProgress.style.display = "none";
+    if (batchProgressFill) batchProgressFill.style.width = "0%";
+    if (batchProgressText) batchProgressText.textContent = "0 / 0";
+
+    if (batchLog) {
+        batchLog.style.display = "none";
+        batchLog.innerHTML = "";
+    }
+
+    if (batchClaimMonth && batchClaimYear) {
+        const now = new Date();
+        batchClaimMonth.value = String(now.getMonth() + 1);
+        batchClaimYear.value = now.getFullYear();
+    }
+
+}
+
 // ── Header + value parsing ───────────────────────────────────────────
 // The uploaded sheet's exact header text varies (line breaks, periods,
 // slashes — "NO. OF CLAIMS" vs "NO OF CLAIMS", "W/ LAB" vs "W LAB"), so
@@ -1318,9 +1377,68 @@ function excelSerialToDate(serial) {
     return isNaN(d) ? null : d;
 }
 
+// ── Shared day-token parsing helpers ─────────────────────────────────
+// Used by parseTreatmentDatesCell(), parseDayQtyListCell(), and
+// parseDayListCell() below so all three columns accept the same range of
+// user handwriting/typing styles instead of each having its own rules.
+
+// Strips ordinal suffixes ("27th" -> "27", "1st-3rd" -> "1-3").
+function stripOrdinals(text) {
+    return String(text).replace(/(\d)(st|nd|rd|th)/gi, "$1");
+}
+
+// Splits a day-list fragment on any common separator — comma, semicolon,
+// slash, embedded newline, or plain whitespace — while normalizing spaced
+// ranges ("27 - 29") down to "27-29" first so the range survives the split.
+function splitDayTokens(text) {
+    return String(text)
+        .replace(/\s*-\s*/g, "-")
+        .split(/[,;\/\n\s]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+}
+
+// Parses a day-list fragment like "28,30", "27-29", "1,3,5", or "28,30
+// 2026" into the individual days plus an optional explicit year. A range
+// ("27-29") expands to every day in between. A standalone number too big
+// to be a day (32+) is treated as an explicit year override rather than
+// a day — e.g. the "2026" in "28,30 2026", or a 2-digit "26" -> 2026.
+// Returns { days: [...], year: number|null }.
+function parseDayListFragment(text) {
+    const days = [];
+    let year = null;
+
+    splitDayTokens(text).forEach(token => {
+
+        const range = token.match(/^(\d{1,2})-(\d{1,2})$/);
+        if (range) {
+            const start = parseInt(range[1], 10);
+            const end = parseInt(range[2], 10);
+            if (start >= 1 && end <= 31 && start <= end) {
+                for (let d = start; d <= end; d++) days.push(d);
+            }
+            return;
+        }
+
+        if (!/^\d{1,4}$/.test(token)) return;
+
+        const n = parseInt(token, 10);
+        if (n >= 1 && n <= 31) {
+            days.push(n);
+        } else if (n >= 32) {
+            year = n < 100 ? 2000 + n : n;
+        }
+
+    });
+
+    return { days, year };
+}
+
 // Reads the "Treatment Dates" cell in any of the shapes the template
-// allows: a real Excel date, "29-Jul", "Jul 28,30", "Jul 27,29,31", or a
-// bare day list ("28,30") that borrows the batch's default month.
+// allows: a real Excel date, "29-Jul", "Jul 28,30", "Jul 27,29,31", a
+// day range ("Jul 27-29"), ordinal days ("29th Jul"), an explicit year
+// anywhere in the text ("Jul 28, 2026"), or a bare day list ("28,30")
+// that borrows the batch's default month.
 // Returns { days: [1..31], month, year } or null if unreadable.
 function parseTreatmentDatesCell(value, defaultMonth, defaultYear) {
 
@@ -1335,36 +1453,53 @@ function parseTreatmentDatesCell(value, defaultMonth, defaultYear) {
         if (d) return { days: [d.getUTCDate()], month: d.getUTCMonth() + 1, year: d.getUTCFullYear() };
     }
 
-    const text = String(value).trim();
-    if (!text) return null;
+    const rawText = String(value).trim();
+    if (!rawText) return null;
 
-    // "Jul 28,30" / "Jul-28,30" — month name, then a comma-separated day list.
-    let m = text.match(/^([A-Za-z]{3,9})[\s,.\-]+([\d\s,]+)$/);
+    // Ordinal suffixes ("27th" -> "27") are stripped up front so every
+    // pattern below can assume plain numbers.
+    const text = stripOrdinals(rawText);
+
+    // "Jul 28,30" / "Jul-28,30" / "Jul 27-29,31" / "Jul 28, 2026" — month
+    // name, then a day list. Days may be separated by commas, semicolons,
+    // slashes, whitespace, or hyphenated ranges ("27-29"), and an
+    // explicit 2- or 4-digit year anywhere in the list overrides the
+    // batch default.
+    let m = text.match(/^([A-Za-z]{3,9})[\s,.\-]+([0-9\s,;\/\-]+)$/);
     if (m) {
         const month = monthFromText(m[1]);
         if (month) {
-            const days = m[2].split(",").map(s => parseInt(s.trim(), 10)).filter(n => n >= 1 && n <= 31);
-            if (days.length) return { days, month, year: defaultYear };
+            const { days, year } = parseDayListFragment(m[2]);
+            if (days.length) return { days, month, year: year || defaultYear };
         }
     }
 
-    // "29-Jul" / "29 Jul" — day number first, then month name.
-    m = text.match(/^(\d{1,2})[\s,.\-\/]+([A-Za-z]{3,9})$/);
+    // "29-Jul" / "29 Jul" / "29 Jul 2026" — day number first, then month
+    // name, with an optional trailing explicit year.
+    m = text.match(/^(\d{1,2})[\s,.\-\/]+([A-Za-z]{3,9})(?:[\s,]+(\d{2,4}))?$/);
     if (m) {
         const month = monthFromText(m[2]);
         const day = parseInt(m[1], 10);
-        if (month && day >= 1 && day <= 31) return { days: [day], month, year: defaultYear };
+        if (month && day >= 1 && day <= 31) {
+            let year = defaultYear;
+            if (m[3]) {
+                const n = parseInt(m[3], 10);
+                year = m[3].length <= 2 ? 2000 + n : n;
+            }
+            return { days: [day], month, year };
+        }
     }
 
-    // Bare day list, no month at all — "28,30" or "29" — borrows the
-    // batch-level default month.
-    if (/^\d{1,2}(\s*,\s*\d{1,2})*$/.test(text)) {
-        const days = text.split(",").map(s => parseInt(s.trim(), 10)).filter(n => n >= 1 && n <= 31);
-        if (days.length) return { days, month: defaultMonth, year: defaultYear };
+    // Bare day list, no month at all — "28,30", "27-29", "1,3,5" —
+    // borrows the batch-level default month (and year, unless the cell
+    // itself includes an explicit year).
+    if (/^[0-9\s,;\/\-]+$/.test(text)) {
+        const { days, year } = parseDayListFragment(text);
+        if (days.length) return { days, month: defaultMonth, year: year || defaultYear };
     }
 
     // Last resort — let the browser parse things like "July 29, 2026".
-    const parsed = new Date(text);
+    const parsed = new Date(rawText);
     if (!isNaN(parsed)) {
         return { days: [parsed.getDate()], month: parsed.getMonth() + 1, year: parsed.getFullYear() };
     }
@@ -1374,9 +1509,12 @@ function parseTreatmentDatesCell(value, defaultMonth, defaultYear) {
 }
 
 // Reads a "day marker" cell (Erythropoietin dates, Beta Recormon): a bare
-// day number (qty 1), "day(N)" for an explicit quantity, or the same day
-// repeated (each occurrence adds 1) — e.g. "27(2),31" or "27,27,31,31".
-// Returns a Map<day, quantity>.
+// day number (qty 1), "day(N)"/"dayxN"/"day*N" for an explicit quantity,
+// the same day repeated (each occurrence adds 1) — e.g. "27(2),31" or
+// "27,27,31,31" — or a day range ("27-29") which applies the same
+// quantity to every day in the range. Separators can be commas,
+// semicolons, slashes, whitespace, or newlines, and ordinal suffixes
+// ("27th") are accepted. Returns a Map<day, quantity>.
 function parseDayQtyListCell(value) {
 
     const result = new Map();
@@ -1406,11 +1544,29 @@ function parseDayQtyListCell(value) {
     const text = String(value).trim();
     if (!text || /^(no|none|n\/a|-)$/i.test(text)) return result;
 
-    text.split(",").forEach(token => {
+    // Collapse whitespace around x/*/()  ("27 x 2" -> "27x2") before
+    // tokenizing, since whitespace is otherwise also a separator between
+    // distinct day entries and would split "27 x 2" into three tokens.
+    const normalized = stripOrdinals(text).replace(/\s*([x*()])\s*/gi, "$1");
 
-        const t = token.trim();
-        const m = t.match(/^(\d{1,2})(?:\((\d+)\))?$/);
+    splitDayTokens(normalized).forEach(token => {
 
+        // Day range, optionally with a shared quantity — "27-29" or
+        // "27-29(2)" / "27-29x2" applies the same quantity to every day.
+        const rangeMatch = token.match(/^(\d{1,2})-(\d{1,2})(?:\s*[x*(]\s*(\d+)\)?)?$/i);
+        if (rangeMatch) {
+            const start = parseInt(rangeMatch[1], 10);
+            const end = parseInt(rangeMatch[2], 10);
+            const qty = rangeMatch[3] ? parseInt(rangeMatch[3], 10) : 1;
+            if (start >= 1 && end <= 31 && start <= end) {
+                for (let d = start; d <= end; d++) addDay(d, qty);
+            }
+            return;
+        }
+
+        // Single day, optionally with a quantity — "27(2)", "27x2",
+        // "27 x 2", "27*2".
+        const m = token.match(/^(\d{1,2})(?:\s*[x*(]\s*(\d+)\)?)?$/i);
         if (!m) return;
 
         const day = parseInt(m[1], 10);
@@ -1425,9 +1581,10 @@ function parseDayQtyListCell(value) {
 }
 
 // Reads a "day marker" cell with no quantity concept (W/ Lab): a bare day
-// number, a comma-separated list of days, or "NO"/blank meaning none.
-// Returns a Set of day-of-month integers to match against the row's
-// treatment days.
+// number, a day range ("27-29"), a list of days (comma/semicolon/slash/
+// whitespace-separated, ordinal suffixes accepted), or "NO"/blank meaning
+// none. Returns a Set of day-of-month integers to match against the
+// row's treatment days.
 function parseDayListCell(value) {
 
     if (value === undefined || value === null || value === "") return new Set();
@@ -1442,7 +1599,7 @@ function parseDayListCell(value) {
     const text = String(value).trim();
     if (!text || /^(no|none|n\/a|-)$/i.test(text)) return new Set();
 
-    const days = text.split(",").map(s => parseInt(s.trim(), 10)).filter(n => n >= 1 && n <= 31);
+    const { days } = parseDayListFragment(stripOrdinals(text));
     return new Set(days);
 
 }
@@ -1555,7 +1712,7 @@ async function downloadBatchTemplate() {
     // sheet, which was manually widened evenly rather than sized per
     // column content. Keeping it uniform is what actually reads clearly.
     sheet.columns = [
-        { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 },
+        { width: 34 }, { width: 20 }, { width: 20 }, { width: 20 },
         { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 }
     ];
 
@@ -1576,17 +1733,23 @@ async function downloadBatchTemplate() {
         cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     });
 
-    // Same rows as the working reference sheet — the three real examples
-    // plus all four alfa-dose-quantity notation examples, so the template
-    // teaches the "27(2)" / repeated-day syntax by example, not just prose.
+    // Same three real examples as the working reference sheet, plus a set
+    // of format-teaching examples covering every notation the parser now
+    // accepts: dose-quantity variants, day ranges, ordinal suffixes, an
+    // explicit year override, and the alternate separators (; /).
     const sampleRows = [
         ["ABAO,GREGORIA", "29-Jul", 1, "", 29, "FISTULA", "HIGH FLUX", 29],
         ["ABOGADO, JOVELYN", "Jul 28,30", 2, "28,30", "", "SUBKIT", "LOW FLUX", "28"],
         ["ALARZAR, CELSO", "Jul 27,29,31", 3, "27,31", "", "SUBKIT", "LOW FLUX", "NO"],
-        ["EXAMPLE 1", "Jul 27,31", 2, "27(2),31", "", "SUBKIT", "LOW FLUX", "NO"],
-        ["EXAMPLE 2", "Jul 27,31", 2, "27,31(2)", "", "SUBKIT", "LOW FLUX", "NO"],
-        ["EXAMPLE 3", "Jul 27,31", 2, "27(2),31(2)", "", "SUBKIT", "LOW FLUX", "NO"],
-        ["EXAMPLE 4", "Jul 27,31", 2, "27,27,31,31", "", "SUBKIT", "HIGH FLUX", "NO"]
+        ["EXAMPLE 1 - dose qty (2)", "Jul 27,31", 2, "27(2),31", "", "SUBKIT", "LOW FLUX", "NO"],
+        ["EXAMPLE 2 - dose qty x2", "Jul 27,31", 2, "27x2,31", "", "SUBKIT", "LOW FLUX", "NO"],
+        ["EXAMPLE 3 - dose qty *2", "Jul 27,31", 2, "27*2,31", "", "SUBKIT", "LOW FLUX", "NO"],
+        ["EXAMPLE 4 - repeated day = qty 2", "Jul 27,31", 2, "27,27,31,31", "", "SUBKIT", "HIGH FLUX", "NO"],
+        ["EXAMPLE 5 - day range", "Jul 27-29", 3, "27-29", "", "SUBKIT", "LOW FLUX", "27-29"],
+        ["EXAMPLE 6 - ordinal days", "29th Jul", 1, "29th", "", "FISTULA", "HIGH FLUX", "NO"],
+        ["EXAMPLE 7 - explicit year", "Jul 28, 2027", 1, "28", "", "FISTULA", "LOW FLUX", "NO"],
+        ["EXAMPLE 8 - semicolon/slash separators", "Jul 5/7/9", 3, "5;7;9", "", "SUBKIT", "HIGH FLUX", "NO"],
+        ["EXAMPLE 9 - bare day list, no month", "28,30", 2, "28,30", "", "SUBKIT", "LOW FLUX", "NO"]
     ];
 
     sampleRows.forEach(values => {
@@ -1600,7 +1763,7 @@ async function downloadBatchTemplate() {
 
     // ── Instructions sheet ──
     const notes = workbook.addWorksheet("Instructions");
-    notes.columns = [{ width: 40 }, { width: 90 }];
+    notes.columns = [{ width: 40 }, { width: 100 }];
 
     const title = notes.addRow(["How to fill out the Batch sheet"]);
     title.getCell(1).font = { bold: true, size: 13 };
@@ -1608,11 +1771,11 @@ async function downloadBatchTemplate() {
 
     const noteLines = [
         ["NAME OF PATIENT", "Used as the output file name."],
-        ["TREATMENT DATES", "\"29-Jul\", \"Jul 28,30\", or a real date. If you only type day numbers with no month (e.g. \"28,30\"), the app's Default Claim Period month/year fills the gap."],
+        ["TREATMENT DATES", "Accepts a real date, \"29-Jul\", \"Jul 28,30\", a day range (\"Jul 27-29\"), ordinal days (\"29th Jul\", \"1st,3rd\"), or an explicit year anywhere in the text (\"Jul 28, 2027\") to override the app's Default Claim Period year. Days can be separated with commas, semicolons, or slashes (\"5;7;9\", \"5/7/9\"). If you only type day numbers with no month (e.g. \"28,30\" or \"27-29\"), the app's Default Claim Period month/year fills the gap."],
         ["NO. OF CLAIMS", "Informational — the app counts claims from Treatment Dates directly. A mismatch just shows as a warning, it won't block generation."],
-        ["DATES OF ERYTHROPOIETIN GIVEN (WEEKLY)", "Day number(s) EPO Alfa was given — must match a day already listed in Treatment Dates. A second dose on the same day: write \"27(2)\", or list the day twice, e.g. \"27,27\". Max 2 doses per day."],
-        ["BETA RECORMON", "Day number(s) EPO Beta (Recormon) was given. Same matching and dose-quantity rules as above, but max 1 dose per day."],
-        ["W/ LAB", "Day number a lab was included, or \"NO\" / blank for none."],
+        ["DATES OF ERYTHROPOIETIN GIVEN (WEEKLY)", "Day number(s) EPO Alfa was given — must match a day already listed in Treatment Dates. A second dose on the same day: write \"27(2)\", \"27x2\", \"27*2\", or list the day twice (\"27,27\"). A range like \"27-29\" applies to every day in it; add a quantity to the whole range with \"27-29x2\". Ordinal suffixes (\"27th\") and semicolon/slash separators are also accepted. Max 2 doses per day."],
+        ["BETA RECORMON", "Same formats and matching rules as Erythropoietin above, but max 1 dose per day."],
+        ["W/ LAB", "Day number(s) a lab was included — accepts the same day-range, ordinal, and separator formats as the other columns — or \"NO\" / blank for none."],
         ["DIALYZER CATEGORY", "FISTULA or SUBKIT."],
         ["KIT CATEGORY", "HIGH FLUX or LOW FLUX."]
     ];
@@ -1750,7 +1913,7 @@ async function generateBatch() {
 
     if (!validEntries.length) return;
 
-    const savedKey = getSavedLicenseKey();
+    const savedKey = await getSavedLicenseKey();
 
     if (!savedKey) {
 

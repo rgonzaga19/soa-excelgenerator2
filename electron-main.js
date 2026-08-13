@@ -34,6 +34,54 @@ ipcMain.handle("get-app-version", () => {
     return app.getVersion();
 });
 
+// ── License key persistence ──────────────────────────────────────────
+// Stored as a small JSON file in the app's userData folder rather than
+// renderer localStorage. This is a synchronous fs write in the main
+// process — it completes fully before the IPC handler returns, so it
+// can't be lost to the same async-flush-vs-quit race that localStorage
+// was subject to (see electron-main.js before-quit handler / the
+// session.flushStorageData() fix that preceded this).
+function getLicenseFilePath() {
+    return path.join(app.getPath("userData"), "license.json");
+}
+
+function readSavedLicenseKey() {
+
+    try {
+
+        const raw = fs.readFileSync(getLicenseFilePath(), "utf8");
+        const data = JSON.parse(raw);
+
+        return typeof data.key === "string" ? data.key : "";
+
+    } catch (err) {
+
+        // No file yet (first run), or it's missing/corrupt — either way
+        // there's no usable saved key.
+        return "";
+
+    }
+
+}
+
+function writeSavedLicenseKey(key) {
+
+    const filePath = getLicenseFilePath();
+
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify({ key: String(key || "").trim() }), "utf8");
+
+}
+
+ipcMain.handle("get-license-key", () => {
+    return readSavedLicenseKey();
+});
+
+ipcMain.handle("save-license-key", (event, key) => {
+    writeSavedLicenseKey(key);
+    return { success: true };
+});
+
 ipcMain.handle("download-update", async (event, downloadUrl) => {
 
     function download(url, destination, resolve, reject) {
@@ -155,9 +203,23 @@ app.whenReady().then(async () => {
 
 });
 
-// Cleanly stop the Express server.
+// Cleanly stop the Express server. Also flushes the renderer's DOM
+// storage (localStorage) to disk first: localStorage.setItem() writes
+// are committed to disk asynchronously by Chromium's storage service, so
+// without this, a value saved (e.g. the dark/light theme preference)
+// just before the app is closed can be lost if the process tears down
+// before that background write completes. The license key no longer
+// goes through this path at all — it's written synchronously to disk by
+// the main process (see get-license-key/save-license-key above), so it
+// isn't subject to this race in the first place.
 app.on("before-quit", () => {
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.session.flushStorageData();
+    }
+
     server.stop();
+
 });
 
 // Quit when all windows are closed (except on macOS).

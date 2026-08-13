@@ -12,5 +12,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     onDownloadProgress: (callback) =>
         ipcRenderer.on("download-progress", (event, percent) => {
             callback(percent);
-        })
+        }),
+
+    getLicenseKey: () => ipcRenderer.invoke("get-license-key"),
+
+    saveLicenseKey: (key) => ipcRenderer.invoke("save-license-key", key)
 });
