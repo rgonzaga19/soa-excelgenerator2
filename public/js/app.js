@@ -1745,7 +1745,7 @@ async function downloadBatchTemplate() {
         ["EXAMPLE 2 - dose qty x2", "Jul 27,31", 2, "27x2,31", "", "SUBKIT", "LOW FLUX", "NO"],
         ["EXAMPLE 3 - dose qty *2", "Jul 27,31", 2, "27*2,31", "", "SUBKIT", "LOW FLUX", "NO"],
         ["EXAMPLE 4 - repeated day = qty 2", "Jul 27,31", 2, "27,27,31,31", "", "SUBKIT", "HIGH FLUX", "NO"],
-        ["EXAMPLE 5 - day range", "Jul 27-29", 3, "27-29", "", "SUBKIT", "LOW FLUX", "27-29"],
+        ["EXAMPLE 5 - day range", "Jul 27-29", 3, "27-29", "", "SUBKIT", "LOW FLUX", "27"],
         ["EXAMPLE 6 - ordinal days", "29th Jul", 1, "29th", "", "FISTULA", "HIGH FLUX", "NO"],
         ["EXAMPLE 7 - explicit year", "Jul 28, 2027", 1, "28", "", "FISTULA", "LOW FLUX", "NO"],
         ["EXAMPLE 8 - semicolon/slash separators", "Jul 5/7/9", 3, "5;7;9", "", "SUBKIT", "HIGH FLUX", "NO"],
