@@ -21,6 +21,26 @@ let currentVersion = "";
 let latestUpdateInfo = null;
 let downloadedInstallerPath = null;
 
+// ── Header update-status badge ──────────────────────────────────────────
+// Mirrors whatever checkForUpdates() finds so the user sees it immediately
+// in the sticky header, without having to open the About modal.
+function setUpdateBadge(state, text) {
+
+    const badge = document.getElementById("updateStatusBadge");
+    if (!badge) return;
+
+    badge.classList.remove("is-checking", "is-uptodate", "is-available", "is-error");
+
+    if (!state) {
+        badge.style.display = "none";
+        return;
+    }
+
+    badge.classList.add(`is-${state}`);
+    badge.innerHTML = `<span class="dot"></span>${text}`;
+    badge.style.display = "flex";
+
+}
 
 // ── Application version ────────────────────────────────────────────────
 
@@ -86,6 +106,8 @@ function isNewerVersion(latest, current) {
 
 async function checkForUpdates(showLatestMessage = false) {
 
+    setUpdateBadge("checking", "Checking…");
+
     try {
 
         if (!currentVersion) {
@@ -100,6 +122,10 @@ async function checkForUpdates(showLatestMessage = false) {
             document.getElementById("updateStatus").textContent =
                 "No license key configured.";
 
+            // Nothing meaningful to show in the header without a key —
+            // hide the badge rather than nag the user on every load.
+            setUpdateBadge(null);
+
             return;
 
         }
@@ -112,6 +138,8 @@ async function checkForUpdates(showLatestMessage = false) {
             document.getElementById("updateStatus").textContent =
                 result.message || "Unable to validate license.";
 
+            setUpdateBadge("error", "Update check failed");
+
             return;
 
         }
@@ -121,6 +149,8 @@ async function checkForUpdates(showLatestMessage = false) {
             document.getElementById("latestVersion").textContent = "-";
             document.getElementById("updateStatus").textContent =
                 "Update information unavailable.";
+
+            setUpdateBadge("error", "Update check failed");
 
             return;
 
@@ -139,6 +169,8 @@ async function checkForUpdates(showLatestMessage = false) {
             document.getElementById("releaseNotesContainer").style.display = "none";
             document.getElementById("downloadUpdateBtn").style.display = "none";
 
+            setUpdateBadge("uptodate", "Up to date");
+
             if (showLatestMessage) {
                 showToast("You're already using the latest version.", "success");
             }
@@ -149,6 +181,8 @@ async function checkForUpdates(showLatestMessage = false) {
 
         document.getElementById("updateStatus").textContent =
             `🟢 Version ${latestUpdateInfo.version} is available.`;
+
+        setUpdateBadge("available", `Update available (v${latestUpdateInfo.version})`);
 
         const notes = document.getElementById("releaseNotes");
 
@@ -172,6 +206,8 @@ async function checkForUpdates(showLatestMessage = false) {
 
         document.getElementById("updateStatus").textContent =
             "Unable to check for updates.";
+
+        setUpdateBadge("error", "Update check failed");
 
     }
 
@@ -1121,6 +1157,11 @@ if (aboutBtn && aboutModal && closeAbout) {
 
     };
 
+    const updateStatusBadge = document.getElementById("updateStatusBadge");
+    if (updateStatusBadge) {
+        updateStatusBadge.onclick = () => aboutBtn.onclick();
+    }
+
     closeAbout.onclick = () => {
         aboutModal.style.display = "none";
     };
@@ -1231,6 +1272,10 @@ document
     });
 
 loadApplicationVersion();
+
+// Silent background check so the header badge reflects update status
+// right away, without waiting for the user to open the About modal.
+checkForUpdates();
 
 // ── Batch generation ─────────────────────────────────────────────
 // Client-side only: parses an uploaded .xlsx (one row per person, wide

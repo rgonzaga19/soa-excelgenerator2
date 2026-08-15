@@ -42,7 +42,7 @@
                 alt="SOA Generator Logo"
                 class="logo"
             >
-            <div>
+            <div class="title-text">
                 <h1>SOA Excel Generator</h1>
                 <p>PhilHealth Statement of Account Generator</p>
             </div>
@@ -50,9 +50,20 @@
     </div>
 
     <div class="header-right">
-        <div class="version-badge" id="versionBadge">
-            Loading...
+
+        <div class="version-status-pill">
+            <span class="version-num" id="versionBadge">Loading...</span>
+            <button
+                id="updateStatusBadge"
+                class="status-segment"
+                type="button"
+                style="display:none;"
+                title="Click for details"
+            ></button>
         </div>
+
+        <div class="header-divider"></div>
+
         <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle dark mode">🌙 Dark</button>
         <button id="settingsBtn" class="about-btn" title="License settings">⚙ Settings</button>
         <button id="aboutBtn" class="about-btn">About</button>
