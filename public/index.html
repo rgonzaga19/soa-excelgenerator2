@@ -219,77 +219,98 @@
 
         <span id="closeAbout" class="close-btn">&times;</span>
 
-        <!-- Header -->
-        <div class="about-header">
-            <div class="about-icon">🏥</div>
-            <div>
-                <h2>SOA Excel Generator</h2>
-                <p class="about-tagline">Internal PhilHealth Statement of Account Generator</p>
+        <div class="about-modal-scroll">
+
+            <!-- Header -->
+            <div class="about-header">
+                <div class="about-icon">🏥</div>
+                <div>
+                    <h2>SOA Excel Generator</h2>
+                    <p class="about-tagline">Internal PhilHealth Statement of Account Generator</p>
+                </div>
             </div>
-        </div>
 
-        <!-- Version info -->
-        <div class="version-panel">
-            <div class="version-row">
-                <span class="version-label">Current Version</span>
-                <span class="version-value" id="aboutVersion">Loading...</span>
+            <!-- What this app is for -->
+            <p class="about-description">
+                Built to speed up the creation of PhilHealth Statements of Account (SOA) —
+                the Excel file used specifically for uploading to Beacon and later
+                generating the SOA XML. It replaces the manual, repetitive, and
+                time-consuming work of building these spreadsheets by hand, turning
+                claim details into a ready-to-upload file in seconds.
+            </p>
+
+            <!-- Version info -->
+            <div class="version-panel">
+                <div class="version-row">
+                    <span class="version-label">Current Version</span>
+                    <span class="version-value" id="aboutVersion">Loading...</span>
+                </div>
+                <div class="version-row">
+                    <span class="version-label">Latest Version</span>
+                    <span class="version-value" id="latestVersion">Checking...</span>
+                </div>
+                <div id="updateStatus" class="update-status-row">
+                    Checking for updates...
+                </div>
             </div>
-            <div class="version-row">
-                <span class="version-label">Latest Version</span>
-                <span class="version-value" id="latestVersion">Checking...</span>
+
+            <!-- Release notes (what's new in the pending update, if any) -->
+            <div id="releaseNotesContainer" class="release-notes-box" style="display:none;">
+                <h3>Release Notes</h3>
+                <ul id="releaseNotes"></ul>
             </div>
-            <div id="updateStatus" class="update-status-row">
-                Checking for updates...
+
+            <!-- Update actions -->
+            <div class="about-actions">
+
+                <button
+                    id="checkUpdateBtn"
+                    class="btn btn-secondary">
+                    🔄 Check for Updates
+                </button>
+
+                <button
+                    id="downloadUpdateBtn"
+                    class="btn btn-primary"
+                    style="display:none;">
+                    ⬇ Download Update
+                </button>
+
             </div>
-        </div>
 
-        <!-- Release notes -->
-        <div id="releaseNotesContainer" class="release-notes-box" style="display:none;">
-            <h3>Release Notes</h3>
-            <ul id="releaseNotes"></ul>
-        </div>
-
-        <!-- Update actions -->
-        <div class="about-actions">
-
-            <button
-                id="checkUpdateBtn"
-                class="btn btn-secondary">
-                🔄 Check for Updates
-            </button>
-
-            <button
-                id="downloadUpdateBtn"
-                class="btn btn-primary"
-                style="display:none;">
-                ⬇ Download Update
-            </button>
-
-        </div>
-
-        <div class="about-divider"></div>
-
-        <!-- App meta -->
-        <div class="about-meta">
-            <div class="meta-row">
-                <span class="meta-label">Other Tools</span>
-                <a
-                    href="https://rgonzaga19.github.io/pdfsplitter/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="tool-link"
-                >
-                    📄 PDF Splitter
-                </a>
+            <!-- Release log (full version history) -->
+            <div class="release-log-box">
+                <h3>Release Log</h3>
+                <div id="releaseLog" class="release-log-list">
+                    <p class="release-log-empty">Loading release history…</p>
+                </div>
             </div>
-            <div class="meta-row">
-                <span class="meta-label">Developer</span>
-                <span class="meta-value">Romel Gonzaga</span>
+
+            <div class="about-divider"></div>
+
+            <!-- App meta -->
+            <div class="about-meta">
+                <div class="meta-row">
+                    <span class="meta-label">Other Tools</span>
+                    <a
+                        href="https://rgonzaga19.github.io/pdfsplitter/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="tool-link"
+                    >
+                        📄 PDF Splitter
+                    </a>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Developer</span>
+                    <span class="meta-value">Romel Gonzaga</span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Built With</span>
+                    <span class="meta-value">Node.js, Express, ExcelJS</span>
+                </div>
             </div>
-            <div class="meta-row">
-                <span class="meta-label">Built With</span>
-                <span class="meta-value">Node.js, Express, ExcelJS</span>
-            </div>
+
         </div>
 
     </div>

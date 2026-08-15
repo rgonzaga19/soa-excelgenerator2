@@ -811,12 +811,13 @@ select:focus {
     background: var(--bg-surface);
     width: 440px;
     max-width: 92%;
-    margin: 90px auto;
+    margin: 40px auto;
     padding: 32px;
     border-radius: 16px;
     position: relative;
     border: 1px solid var(--border-color);
     box-shadow: 0 20px 60px var(--shadow-lg);
+    box-sizing: border-box;
 }
 
 .modal-content h2 {
@@ -1229,8 +1230,40 @@ select:focus {
    a clean meta list — all built on top of the existing .modal /
    .modal-content shell. */
 .about-modal-content {
-    width: 460px;
-    padding: 30px 32px 28px;
+    width: 600px;
+    padding: 26px 32px 28px;
+    max-height: calc(100vh - 80px);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Everything except the close button lives in this scrollable region,
+   so the X stays put and reachable no matter how far the user scrolls
+   through a long release log. */
+.about-modal-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 10px;
+    margin-right: -10px;
+    /* Room for the sticky close button so the title never sits under it. */
+    padding-top: 4px;
+}
+
+.about-modal-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.about-modal-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.about-modal-scroll::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 8px;
+}
+
+.about-modal-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
 }
 
 .about-header {
@@ -1266,6 +1299,13 @@ select:focus {
     color: var(--text-muted);
     margin: 0;
     line-height: 1.4;
+}
+
+.about-description {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0 0 18px;
 }
 
 /* Version panel */
@@ -1386,6 +1426,74 @@ select:focus {
 .btn:active {
     transform: scale(.98);
     box-shadow: none;
+}
+
+/* Release log (full version history) */
+.release-log-box {
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px 18px 6px;
+    margin-bottom: 20px;
+}
+
+.release-log-box h3 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+}
+
+.release-log-list {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.release-log-entry {
+    padding: 10px 0;
+    border-top: 1px solid var(--border-light);
+}
+
+.release-log-entry:first-child {
+    border-top: none;
+}
+
+.release-log-entry-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.release-log-version {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.release-log-date {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    font-weight: 600;
+}
+
+.release-log-entry ul {
+    padding-left: 18px;
+}
+
+.release-log-entry li {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+    line-height: 1.5;
+}
+
+.release-log-empty {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    padding: 6px 0 10px;
 }
 
 .about-divider {
