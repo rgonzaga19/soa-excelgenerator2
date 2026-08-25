@@ -90,7 +90,7 @@ const LABORATORY_ROWS = [
         price: 250.00,
         esoaGroup: "LaboratoryAndDiagnostic",
         unit: "",
-        mapping: "CHEMISTRY: CBC"
+        mapping: "HEMATOLOGY: CBC"
     }
 ];
 
